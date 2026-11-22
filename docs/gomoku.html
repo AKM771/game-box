@@ -17,6 +17,7 @@ h1{font-size:20px;margin:10px 0 6px}
 canvas{background:#E8C58A;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
 .msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
 .tip{color:#6b6b70;font-size:13px;margin-top:6px}
+.act{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:7px;cursor:pointer;margin-top:6px}
 </style>
 </head>
 <body>
@@ -30,13 +31,15 @@ canvas{background:#E8C58A;border:1px solid #d9d9dd;border-radius:10px;max-width:
 </div>
 <canvas id="cv" width="480" height="480"></canvas>
 <p class="msg" id="msg"></p>
-<p class="tip">点交叉点落子 · 手机同样点 · R 重开 · 换难度立即重开</p>
+<button class="act" id="resetBtn">重开</button>
+<p class="tip">点交叉点落子 · 手机同样点 · 结束点「重开」再来 · 换难度立即重开</p>
 <script>
 (function(){
 "use strict";
 var N=15,CELL=32,PAD=16,SIZE=PAD*2+CELL*(N-1);  // 32+448=480，与 canvas 等宽
 var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
 var msgEl=document.getElementById("msg");
+var resetBtn=document.getElementById("resetBtn");
 var board,over,diff=1,think=false;   // board: 0空 1我黑 2AI白
 
 function reset(){
@@ -203,6 +206,7 @@ for(var b=0;b<bl.length;b++){
     reset();
   });
 }
+resetBtn.addEventListener("click",reset);
 document.addEventListener("keydown",function(e){
   if(e.key==="r"||e.key==="R")reset();
 });

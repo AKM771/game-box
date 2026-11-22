@@ -38,7 +38,7 @@ button{font:inherit;padding:6px 18px;border:1px solid #c9c9ce;background:#fff;bo
 var board,score,best=0,won=false,over=false;
 var boardEl=document.getElementById("board"),scoreEl=document.getElementById("score"),
     bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
-function loadBest(){try{best=parseInt(localStorage.getItem("g2048_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function loadBest(){try{best=parseInt(localStorage.getItem("2048_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
 function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem("2048_best",String(best));}catch(e){}}}
 function emptyCells(){
   var e=[];for(var i=0;i<16;i++){if(board[i]===0)e.push(i);}return e;

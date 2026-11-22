@@ -60,7 +60,7 @@ function reset(){
   scoreEl.textContent="0";
   msgEl.textContent="点黑块开始 · 白块千万别碰";
   loadBest();
-  spawnRow(-RH);spawnRow(-RH*2);spawnRow(-RH*3);
+  spawnRow(RH*3);spawnRow(RH*2);spawnRow(RH);spawnRow(0);spawnRow(-RH);   // 下→上排：index0=最底(先落出)，rows[last]=最顶(新行续在其上方)
   if(mode==="rush"){rushLeft=60;timebox.innerHTML=" · 剩余 <b>60</b>s";draw();}
 }
 function spawnRow(y){
@@ -180,12 +180,12 @@ function draw(){
   }
 }
 cv.addEventListener("mousedown",function(e){
-  if(over)return;
+  if(over){reset();return;}
   var rect=cv.getBoundingClientRect();
   tap((e.clientX-rect.left)*(W/rect.width),(e.clientY-rect.top)*(H/rect.height));
 });
 cv.addEventListener("touchstart",function(e){
-  if(over){e.preventDefault();return;}
+  if(over){reset();e.preventDefault();return;}
   var rect=cv.getBoundingClientRect();
   var t=e.touches[0];
   tap((t.clientX-rect.left)*(W/rect.width),(t.clientY-rect.top)*(H/rect.height));

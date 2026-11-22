@@ -85,7 +85,6 @@ function endGame(msg){
   goBtn.textContent="再来一局";
 }
 function tick(){
-  var aliveCount=0;
   for(var p=0;p<2;p++){
     if(!snakes[p].alive)continue;
     dir[p]=queued[p];

@@ -48,7 +48,7 @@ function speedNow(){
   return Math.min(base+score*0.012,[8,10,13][diff]);
 }
 function reset(){
-  px=LANES[1];py=H-100;
+  px=LANES[1];py=H-100;tx=LANES[1];   // tx 每局重置，否则开局车会自己滑到上局位置
   traffic=[];score=0;over=false;run=false;frame=0;spawnT=0;shake=0;
   scoreEl.textContent="0";
   loadBest();
@@ -188,7 +188,8 @@ function nearestLane(x){
   return LANES[bestI];
 }
 cv.addEventListener("mousedown",function(){
-  if(!over&&!run){run=true;tx=px;msgEl.textContent="走！躲开红车，金色车 +1.5 倍";}
+  if(over){reset();tx=px;return;}
+  if(!run){run=true;tx=px;msgEl.textContent="走！躲开红车，金色车 +1.5 倍";}
 });
 cv.addEventListener("touchstart",function(e){
   if(over){reset();e.preventDefault();return;}

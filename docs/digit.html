@@ -53,7 +53,7 @@ function loadBest(){try{best=parseInt(localStorage.getItem(bestKey())||"0",10)||
 function saveBest(){if(len-1>best){best=len-1;bestEl.textContent=best;try{localStorage.setItem(bestKey(),String(best));}catch(e){}}}
 var ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ";   // 去掉易混的 I O
 function gen(){
-  var out="",n=mode===0?10:36;
+  var out="";
   for(var i=0;i<len;i++){
     if(mode===0)out+=String(Math.floor(Math.random()*10));
     else{
