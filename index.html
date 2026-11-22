@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小游戏合集 — 打开就能玩</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.75 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+a{color:#2f5596}
+header{border-bottom:1px solid #e2e2e5;background:#fff}
+.hd{display:flex;align-items:center;gap:10px;padding:14px 0}
+.hd .logo{width:30px;height:30px;background:#1b1b1e;color:#fff;display:flex;align-items:center;justify-content:center;border-radius:7px;font-weight:700}
+.hd b{font-size:17px}
+.hd .sp{flex:1}
+.hd a{font-size:14px;text-decoration:none;color:#44444a}
+.hero{padding:46px 0 30px}
+.hero h1{font-size:30px;margin:0 0 10px;font-weight:650}
+.hero p{font-size:17px;color:#3c3c42;margin:0;max-width:640px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding-bottom:40px}
+.card{background:#fff;border:1px solid #e2e2e5;border-radius:10px;padding:18px;text-decoration:none;color:inherit;transition:border-color .15s}
+.card:hover{border-color:#9a9aa2}
+.card .ic{width:26px;height:26px;fill:#1b1b1e;margin-bottom:10px;display:block}
+.card h3{font-size:16px;margin:0 0 6px;font-weight:650}
+.card p{margin:0 0 12px;font-size:13.5px;color:#55555c;line-height:1.65;min-height:44px}
+.card .go{font-size:14px;color:#2f5596}
+.card .go::after{content:" →"}
+footer{border-top:1px solid #e2e2e5;background:#fff;padding:20px 0 30px;font-size:13.5px;color:#6b6b70}
+</style>
+</head>
+<body>
+<header><div class="wrap hd"><span class="logo">G</span><b>小游戏合集 Game Box</b><span class="sp"></span></div></header>
+<main class="wrap">
+  <section class="hero">
+    <h1>四个小游戏，打开就能玩。</h1>
+    <p>纯网页，不用安装不用注册，双击就能开。手机浏览器也能玩（滑屏操作）。分数存本机，刷新不丢。</p>
+  </section>
+  <div class="grid">
+    <a class="card" href="snake.html">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M9,9V10H14V9H9M9,14V15H14V14H9Z"/></svg>
+      <h3>贪吃蛇</h3>
+      <p>方向键或滑屏喂自己。越吃越长，撞墙撞自己就完。最高分记本机。</p>
+      <span class="go">开玩</span>
+    </a>
+    <a class="card" href="2048.html">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M4,5H10V11H4V5M4,13H10V19H4V13M12,5H18V11H12V5M12,13H18V19H12V13M20,3V5H22V7H20V3M4,3H16V5H4V3M4,19H16V21H4V19M20,17H22V19H20V17M20,9H22V11H20V9M2,9H4V11H2V9M2,17H4V19H2V17M2,1H4V3H2V1M18,21H20V23H18V21M18,1H20V3H18V1Z"/></svg>
+      <h3>2048</h3>
+      <p>滑动拼数字，两个相同就合成一个。目标 2048，先别把格子堵死。键盘和滑屏都行。</p>
+      <span class="go">开玩</span>
+    </a>
+    <a class="card" href="breakout.html">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M5,13H9V9H5M10,13H14V9H10M15,13H19V9H15M5,17H9V13H5M10,17H14V13H10M15,17H19V13H15M3,7H21V11H3M3,19H21V21H3V19M3,5V7H3V5Z"/></svg>
+      <h3>打砖块</h3>
+      <p>挡板接球，把整面墙打穿。球越弹越快，掉三次球就结束。鼠标和滑屏控挡板。</p>
+      <span class="go">开玩</span>
+    </a>
+    <a class="card" href="tetris.html">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M4,3H8V7H4V3M4,9H8V13H4V9M10,3H14V7H10V3M10,9H14V13H10V9M16,3H20V7H16V3M4,15H8V19H4V15M10,15H14V19H10V15M16,9H20V13H16V9M16,15H20V19H16V15M3,21H21V23H3V21Z"/></svg>
+      <h3>俄罗斯方块</h3>
+      <p>经典款：落块消行，越打越快。方向键控制，空格直接砸，P 暂停 R 重开。</p>
+      <span class="go">开玩</span>
+    </a>
+  </div>
+</main>
+<footer><div class="wrap">小游戏合集 · 纯前端零后端 · 反馈：jjonju361999@qq.com · GPL-3.0</div></footer>
+</body>
+</html>

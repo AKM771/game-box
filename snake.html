@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>贪吃蛇 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+canvas{background:#fff;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.tip{color:#6b6b70;font-size:13px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>贪吃蛇</h1>
+<p class="info">分数 <b id="score">0</b> · 最高 <b id="best">0</b></p>
+<canvas id="cv" width="400" height="400"></canvas>
+<p class="tip">方向键控制 · 手机滑屏 · 撞墙或撞自己就结束，点画布重开</p>
+<script>
+(function(){
+"use strict";
+var G=20, N=20, S=400/N;
+var cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+var scoreEl=document.getElementById("score"), bestEl=document.getElementById("best");
+var snake,dir,queued,food,score,best,over,timer=null;
+function loadBest(){try{best=parseInt(localStorage.getItem("snake_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem("snake_best",String(best));}catch(e){}}}
+function rnd(){return Math.floor(Math.random()*N);}
+function placeFood(){
+  var ok=false;
+  while(!ok){
+    var x=rnd(),y=rnd(),hit=false;
+    for(var i=0;i<snake.length;i++){if(snake[i].x===x&&snake[i].y===y){hit=true;break;}}
+    if(!hit){food={x:x,y:y};ok=true;}
+  }
+}
+function init(){
+  snake=[{x:9,y:10},{x:8,y:10},{x:7,y:10}];
+  dir={x:1,y:0};queued={x:1,y:0};
+  score=0;over=false;
+  scoreEl.textContent="0";
+  placeFood();
+  if(timer)clearInterval(timer);
+  timer=setInterval(tick,140);
+  draw();
+}
+function tick(){
+  if(over)return;
+  dir=queued;
+  var head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(head.x<0||head.y<0||head.x>=N||head.y>=N){die();return;}
+  for(var i=0;i<snake.length;i++){if(snake[i].x===head.x&&snake[i].y===head.y){die();return;}}
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){
+    score+=1;scoreEl.textContent=score;placeFood();
+  }else{
+    snake.pop();
+  }
+  draw();
+}
+function die(){
+  over=true;
+  if(timer){clearInterval(timer);timer=null;}
+  saveBest();
+  draw();
+}
+function draw(){
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,400,400);
+  ctx.fillStyle="#E53935";
+  ctx.fillRect(food.x*S+3,food.y*S+3,S-6,S-6);
+  for(var i=snake.length-1;i>=0;i--){
+    var s=snake[i];
+    ctx.fillStyle=(i===0)?"#1b1b1e":"#4a6a8a";
+    ctx.fillRect(s.x*S+1,s.y*S+1,S-2,S-2);
+  }
+  if(over){
+    ctx.fillStyle="rgba(0,0,0,.55)";ctx.fillRect(0,0,400,400);
+    ctx.fillStyle="#fff";ctx.font="bold 26px sans-serif";ctx.textAlign="center";
+    ctx.fillText("结束 · "+score+" 分",200,195);
+    ctx.font="15px sans-serif";ctx.fillText("点画布重开",200,230);
+  }
+}
+function setDir(x,y){
+  if(x===-dir.x&&y===-dir.y)return;   // 不许原地掉头
+  queued={x:x,y:y};
+}
+document.addEventListener("keydown",function(e){
+  var k=e.key;
+  if(k==="ArrowUp"||k==="w"||k==="W"){setDir(0,-1);e.preventDefault();}
+  else if(k==="ArrowDown"||k==="s"||k==="S"){setDir(0,1);e.preventDefault();}
+  else if(k==="ArrowLeft"||k==="a"||k==="A"){setDir(-1,0);e.preventDefault();}
+  else if(k==="ArrowRight"||k==="d"||k==="D"){setDir(1,0);e.preventDefault();}
+  else if((k===" "||k==="Enter")&&over){init();e.preventDefault();}
+});
+var tx=0,ty=0;
+cv.addEventListener("touchstart",function(e){tx=e.touches[0].clientX;ty=e.touches[0].clientY;e.preventDefault();if(over)init();},{passive:false});
+cv.addEventListener("touchend",function(e){
+  var t=e.changedTouches[0],dx=t.clientX-tx,dy=t.clientY-ty;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20){if(over)init();return;}
+  if(Math.abs(dx)>Math.abs(dy))setDir(dx>0?1:-1,0);
+  else setDir(0,dy>0?1:-1);
+  e.preventDefault();
+},{passive:false});
+cv.addEventListener("click",function(){if(over)init();});
+loadBest();init();
+})();
+</script>
+</body>
+</html>
