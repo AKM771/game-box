@@ -1,12 +1,12 @@
 # 小游戏合集 Game Box
 
-四个纯前端 HTML5 小游戏：贪吃蛇 / 2048 / 打砖块 / 俄罗斯方块。打开即玩，不用安装、不用注册、不用后端；手机浏览器可玩（滑屏操作）。
+八个纯前端 HTML5 小游戏：贪吃蛇 / 2048 / 打砖块 / 俄罗斯方块 / 扫雷 / 飞翔的小鸟 / 记忆翻牌 / 数字华容道。打开即玩，不用安装、不用注册、不用后端；手机浏览器可玩（滑屏操作）。
 
 在线玩：`https://akm771.github.io/game-box/`（GitHub Pages）
 
 ## 本地跑
 
-双击 `index.html` 就行（file:// 直开），或者：
+双击 `docs/index.html` 就行（file:// 直开），或者：
 
 ```
 python -m http.server 8000
@@ -22,6 +22,11 @@ python -m http.server 8000
 | 2048.html | 2048（方向键/WASD/滑屏） |
 | breakout.html | 打砖块（鼠标/滑屏挡板，3 命进关） |
 | tetris.html | 俄罗斯方块（←→↑空格 P/R，手机滑屏） |
+| minesweeper.html | 扫雷（三档难度，右键/长按插旗，首点安全） |
+| flappy.html | 飞翔的小鸟（点/空格扇翅膀，钻管道） |
+| memory.html | 记忆翻牌（4×4/6×6 配对，步数计数） |
+| puzzle.html | 数字华容道（3×3/4×4 滑块，必可解洗牌） |
+| mdi_icons.txt | 首页卡片图标 path（Google MDI，Apache-2.0，来源 Templarian/MaterialDesign） |
 
 零依赖、零构建、零请求——每页自包含（内联样式脚本），推 GitHub Pages 即上线。
 

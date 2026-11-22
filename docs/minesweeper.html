@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>扫雷 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:10px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#scroll{overflow-x:auto;max-width:96vw;padding-bottom:6px}
+#board{display:inline-grid;gap:2px;background:#c9c9ce;padding:6px;border-radius:8px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.cell{width:26px;height:26px;background:#e8e8ea;border:1px solid #f6f6f7;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;cursor:pointer;position:relative}
+.cell.rv{background:#f7f7f8;border-color:#dddde0;cursor:default}
+.cell.boom{background:#f2b8b5}
+.cell.fl::before{content:"";position:absolute;left:6px;top:5px;width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:9px solid #E53935}
+.cell.fl::after{content:"";position:absolute;left:5px;top:5px;width:2px;height:14px;background:#55555c}
+.n1{color:#1E88E8}.n2{color:#43A047}.n3{color:#E53935}.n4{color:#5E35B1}
+.n5{color:#8E24AA}.n6{color:#00897B}.n7{color:#1b1b1e}.n8{color:#757575}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:10px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>扫雷</h1>
+<p class="info">雷剩 <b id="fc">40</b> · 时间 <b id="timer">0</b> · 最快 <b id="best">--</b></p>
+<div class="lv">
+  <button data-lv="e">初级 9×9</button>
+  <button data-lv="m">中级 16×16</button>
+  <button data-lv="h">高级 16×30</button>
+</div>
+<div id="scroll"><div id="board"></div></div>
+<p class="msg" id="msg"></p>
+<p class="tip">左键翻开 · 右键插旗（手机：点=翻，长按=插旗）· 第一下永远安全 · R 重开</p>
+<script>
+(function(){
+"use strict";
+var LV={e:{r:9,c:9,m:10},m:{r:16,c:16,m:40},h:{r:16,c:30,m:99}};
+var level="m";
+var rows,cols,mines,grid,mineMap,numMap,first,over,started,flags,revealed,timer,secs;
+var boardEl=document.getElementById("board");
+var fcEl=document.getElementById("fc"),timerEl=document.getElementById("timer"),
+    bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
+
+function bestKey(){return "ms_best_"+level;}
+function showBest(){
+  var v=null;
+  try{v=localStorage.getItem(bestKey());}catch(e){}
+  bestEl.textContent=(v===null?"--":v);
+}
+function idx(r,c){return r*cols+c;}
+function inBox(r,c){return r>=0&&r<rows&&c>=0&&c<cols;}
+function neighbors(r,c){
+  var out=[];
+  for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){
+    if(dr===0&&dc===0)continue;
+    if(inBox(r+dr,c+dc))out.push([r+dr,c+dc]);
+  }
+  return out;
+}
+function placeMines(safeR,safeC){
+  var forbidden={};forbidden[idx(safeR,safeC)]=1;
+  var ns=neighbors(safeR,safeC);
+  for(var i=0;i<ns.length;i++)forbidden[idx(ns[i][0],ns[i][1])]=1;
+  var placed=0;
+  while(placed<mines){
+    var r=Math.floor(Math.random()*rows),c=Math.floor(Math.random()*cols),k=idx(r,c);
+    if(forbidden[k]||mineMap[k])continue;
+    mineMap[k]=1;placed++;
+  }
+  for(r=0;r<rows;r++)for(c=0;c<cols;c++){
+    if(mineMap[idx(r,c)]){numMap[idx(r,c)]=-1;continue;}
+    var n=0,ns2=neighbors(r,c);
+    for(i=0;i<ns2.length;i++)if(mineMap[idx(ns2[i][0],ns2[i][1])])n++;
+    numMap[idx(r,c)]=n;
+  }
+}
+function tickTimer(){
+  if(over)return;
+  secs++;if(secs>999)secs=999;
+  timerEl.textContent=secs;
+}
+function startTimer(){
+  if(started)return;
+  started=true;secs=0;timerEl.textContent="0";
+  timer=setInterval(tickTimer,1000);
+}
+function stopTimer(){if(timer){clearInterval(timer);timer=null;}}
+function flagCountUpdate(){fcEl.textContent=(mines-flags);}
+function lose(hitEl){
+  over=true;stopTimer();
+  for(var r=0;r<rows;r++)for(var c=0;c<cols;c++){
+    var cell=grid[r][c];
+    if(!mineMap[idx(r,c)]&&cell.classList.contains("fl")){cell.textContent="×";cell.classList.remove("fl");cell.style.color="#E53935";continue;}
+    if(mineMap[idx(r,c)]&&!cell.classList.contains("fl")){cell.classList.add("rv");cell.textContent="●";}
+  }
+  if(hitEl)hitEl.classList.add("boom");
+  msgEl.textContent="踩雷了 · 用时 "+secs+" 秒 · 按 R 重开";
+}
+function win(){
+  over=true;stopTimer();
+  msgEl.textContent="清完了！用时 "+secs+" 秒";
+  var old=null;
+  try{old=parseInt(localStorage.getItem(bestKey())||"",10);}catch(e){}
+  if(!old||secs<old){try{localStorage.setItem(bestKey(),String(secs));}catch(e){}}
+  showBest();
+}
+function reveal(r,c){
+  if(over)return;
+  var stack=[[r,c]];
+  while(stack.length){
+    var p=stack.pop(),pr=p[0],pc=p[1],k=idx(pr,pc),cell=grid[pr][pc];
+    if(cell.classList.contains("rv")||cell.classList.contains("fl"))continue;
+    cell.classList.add("rv");
+    revealed++;
+    var n=numMap[k];
+    if(n>0){cell.textContent=n;cell.classList.add("n"+n);}
+    else{
+      var ns=neighbors(pr,pc);
+      for(var i=0;i<ns.length;i++){
+        var nr=ns[i][0],nc=ns[i][1];
+        if(!grid[nr][nc].classList.contains("rv"))stack.push([nr,nc]);
+      }
+    }
+  }
+}
+function doReveal(r,c){
+  if(over)return;
+  var cell=grid[r][c];
+  if(cell.classList.contains("fl")||cell.classList.contains("rv"))return;
+  if(!first){
+    first=true;
+    placeMines(r,c);
+    startTimer();
+  }
+  if(mineMap[idx(r,c)]){lose(cell);return;}
+  reveal(r,c);
+  if(revealed===rows*cols-mines)win();
+}
+function toggleFlag(r,c){
+  if(over)return;
+  var cell=grid[r][c];
+  if(cell.classList.contains("rv"))return;
+  if(cell.classList.contains("fl")){cell.classList.remove("fl");flags--;}
+  else{cell.classList.add("fl");flags++;}
+  flagCountUpdate();
+}
+function build(){
+  stopTimer();
+  var L=LV[level];
+  rows=L.r;cols=L.c;mines=L.m;
+  first=false;over=false;started=false;flags=0;revealed=0;secs=0;
+  mineMap=new Array(rows*cols).fill(0);
+  numMap=new Array(rows*cols).fill(0);
+  grid=[];
+  msgEl.textContent="";timerEl.textContent="0";
+  flagCountUpdate();showBest();
+  var btns=document.querySelectorAll(".lv button");
+  for(var i=0;i<btns.length;i++)btns[i].classList.toggle("on",btns[i].getAttribute("data-lv")===level);
+  boardEl.style.gridTemplateColumns="repeat("+cols+",26px)";
+  boardEl.innerHTML="";
+  for(var r=0;r<rows;r++){
+    grid.push([]);
+    for(var c=0;c<cols;c++){
+      var d=document.createElement("div");
+      d.className="cell";
+      d.dataset.r=r;d.dataset.c=c;
+      boardEl.appendChild(d);
+      grid[r].push(d);
+    }
+  }
+}
+// 事件
+boardEl.addEventListener("click",function(e){
+  var t=e.target;
+  if(!t.classList.contains("cell"))return;
+  doReveal(+t.dataset.r,+t.dataset.c);
+});
+boardEl.addEventListener("contextmenu",function(e){
+  e.preventDefault();
+  var t=e.target;
+  if(!t.classList.contains("cell"))return;
+  toggleFlag(+t.dataset.r,+t.dataset.c);
+});
+// 触屏：轻点=翻，长按=插旗
+var lt=0,lx=0,ly=0,longFired=false;
+boardEl.addEventListener("touchstart",function(e){
+  var t=e.touches[0];lt=Date.now();lx=t.clientX;ly=t.clientY;longFired=false;
+  var el=document.elementFromPoint(t.clientX,t.clientY);
+  if(el&&el.classList.contains("cell")){
+    el._lt=setTimeout(function(){
+      longFired=true;
+      toggleFlag(+el.dataset.r,+el.dataset.c);
+    },450);
+  }
+},{passive:true});
+boardEl.addEventListener("touchend",function(e){
+  var t=e.changedTouches[0],dx=t.clientX-lx,dy=t.clientY-ly;
+  var el=document.elementFromPoint(lx,ly);
+  if(el&&el._lt){clearTimeout(el._lt);el._lt=null;}
+  if(Date.now()-lt>=450){longFired=true;}   // 长按已处理
+  if(Math.abs(dx)<12&&Math.abs(dy)<12&&!longFired){
+    if(el&&el.classList.contains("cell"))doReveal(+el.dataset.r,+el.dataset.c);
+    e.preventDefault();
+  }
+},{passive:false});
+boardEl.addEventListener("touchmove",function(e){
+  var el=document.elementFromPoint(lx,ly);
+  if(el&&el._lt){clearTimeout(el._lt);el._lt=null;}
+},{passive:true});
+var btnList=document.querySelectorAll(".lv button");
+for(var b=0;b<btnList.length;b++){
+  btnList[b].addEventListener("click",function(){level=this.getAttribute("data-lv");build();});
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="r"||e.key==="R")build();
+});
+build();
+})();
+</script>
+</body>
+</html>

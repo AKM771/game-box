@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记忆翻牌 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#board{display:inline-grid;gap:8px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.card{width:62px;height:86px;position:relative;perspective:600px;cursor:pointer}
+.face{position:absolute;inset:0;transition:transform .3s;transform-style:preserve-3d;border-radius:8px}
+.card.open .face,.card.done .face{transform:rotateY(180deg)}
+.front,.backface{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.front{background:#2f5596;color:#fff;font-size:26px;font-weight:700}
+.front::after{content:"?";opacity:.85}
+.backface{background:#fff;border:1px solid #d9d9dd;transform:rotateY(180deg);font-size:32px}
+.card.done .backface{background:#eef6ee;border-color:#a5d6a7}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>记忆翻牌</h1>
+<p class="info">步数 <b id="moves">0</b> · 配对 <b id="pairs">0/8</b> · 最快 <b id="best">--</b> 步</p>
+<div class="lv">
+  <button data-lv="4">简单 4×4</button>
+  <button data-lv="6">困难 6×6</button>
+</div>
+<div id="board"></div>
+<p class="msg" id="msg"></p>
+<p class="tip">点两张翻牌，一样的就留下 · 步数越少越好 · R 重开</p>
+<script>
+(function(){
+"use strict";
+var SUITS=["♠","♥","♣","♦"],RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+var boardEl=document.getElementById("board");
+var movesEl=document.getElementById("moves"),pairsEl=document.getElementById("pairs"),
+    bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
+var size=4,deck,first,lock,moves,matched,pairs;
+
+function bestKey(){return "memo_best_"+size;}
+function showBest(){
+  var v=null;try{v=localStorage.getItem(bestKey());}catch(e){}
+  bestEl.textContent=(v===null?"--":v);
+}
+function shuffle(a){
+  for(var i=a.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t;
+  }
+  return a;
+}
+function buildDeck(){
+  var cards=[],i;
+  if(size===4){
+    // 4x4=16 张 → 8 对，四花色 2、3、4、5、6、7、8、9（去 1/J/Q/K，凑 16）
+    var ranks=["2","3","4","5","6","7","8","9"];
+    for(i=0;i<ranks.length;i++){
+      var s=(i%4);
+      cards.push(SUITS[s]+ranks[i]);
+      cards.push(SUITS[s]+ranks[i]);
+    }
+  }else{
+    // 6x6=36 张 → 18 对
+    var all=[];
+    for(i=0;i<12;i++){
+      var s1=i%4,r1=RANKS[i%12];
+      all.push(SUITS[s1]+r1);
+    }
+    // 12 对不够 18，补 6 对 A/K（校验与 all 无重叠：all 只含 ♠A♥2♣3♦4♠5♥6♣7♦8♠9♥10♣J♦Q）
+    var extra=["♥A","♣A","♦A","♠K","♥K","♣K"];
+    for(i=0;i<12;i++){deckPair(cards,all[i]);}
+    for(i=0;i<extra.length;i++){deckPair(cards,extra[i]);}
+  }
+  return shuffle(cards);
+}
+function deckPair(cards,v){cards.push(v);cards.push(v);}
+function pairCount(){return (size*size)/2;}
+function updateHUD(){
+  movesEl.textContent=moves;
+  pairsEl.textContent=matched+"/"+pairs;
+}
+function flip(card){
+  if(lock||card.classList.contains("open")||card.classList.contains("done"))return;
+  card.classList.add("open");
+  if(!first){first=card;return;}
+  var a=first,b=card;
+  first=null;
+  if(a.dataset.v===b.dataset.v){
+    moves++;updateHUD();
+    a.classList.remove("open");b.classList.remove("open");
+    a.classList.add("done");b.classList.add("done");
+    matched++;updateHUD();
+    if(matched===pairs)win();
+  }else{
+    lock=true;
+    moves++;updateHUD();
+    setTimeout(function(){
+      a.classList.remove("open");b.classList.remove("open");
+      lock=false;
+    },650);
+  }
+}
+function win(){
+  msgEl.textContent="全部配对！用了 "+moves+" 步";
+  var old=null;try{old=parseInt(localStorage.getItem(bestKey())||"",10);}catch(e){}
+  if(!old||moves<old){try{localStorage.setItem(bestKey(),String(moves));}catch(e){}}
+  showBest();
+}
+function build(){
+  pairs=pairCount();
+  deck=buildDeck();
+  first=null;lock=false;moves=0;matched=0;
+  msgEl.textContent="";
+  showBest();updateHUD();
+  var btns=document.querySelectorAll(".lv button");
+  for(var i=0;i<btns.length;i++)btns[i].classList.toggle("on",btns[i].getAttribute("data-lv")===String(size));
+  var cols=size;
+  boardEl.style.gridTemplateColumns="repeat("+cols+",62px)";
+  boardEl.innerHTML="";
+  for(i=0;i<deck.length;i++){
+    var c=document.createElement("div");
+    c.className="card";
+    c.dataset.v=deck[i];
+    c.innerHTML='<div class="face"><div class="front"></div><div class="backface">'+deck[i]+'</div></div>';
+    boardEl.appendChild(c);
+  }
+}
+boardEl.addEventListener("click",function(e){
+  var t=e.target.closest(".card");
+  if(t)flip(t);
+});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){size=+this.getAttribute("data-lv");build();});
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="r"||e.key==="R")build();
+});
+build();
+})();
+</script>
+</body>
+</html>

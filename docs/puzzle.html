@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数字华容道 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#board{display:inline-grid;gap:6px;background:#c9c9ce;padding:8px;border-radius:10px;touch-action:none;-webkit-user-select:none;user-select:none}
+.tile{background:#fff;border:1px solid #d9d9dd;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#1b1b1e;cursor:pointer}
+.tile.ok{background:#e3f0e3;border-color:#a5d6a7;color:#2e7d32}
+.tile.hole{background:transparent;border-color:transparent;cursor:default}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>数字华容道</h1>
+<p class="info">步数 <b id="moves">0</b> · 最快 <b id="best">--</b> 步</p>
+<div class="lv">
+  <button data-lv="3">3×3 八数码</button>
+  <button data-lv="4" class="on">4×4 十五数码</button>
+</div>
+<div id="board"></div>
+<p class="msg" id="msg"></p>
+<p class="tip">方向键 / 滑屏 / 点空格相邻的块移动 · 把 1→N 排好、空格右下就赢 · R 重开</p>
+<script>
+(function(){
+"use strict";
+var N=4;                 // 边长
+var boardEl=document.getElementById("board");
+var movesEl=document.getElementById("moves"),bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
+var tiles,cells,empty,moves,won;
+
+function bestKey(){return "puzzle_best_"+N;}
+function showBest(){
+  var v=null;try{v=localStorage.getItem(bestKey());}catch(e){}
+  bestEl.textContent=(v===null?"--":v);
+}
+function idx(r,c){return r*N+c;}
+function rc(i){return [Math.floor(i/N),i%N];}
+function adjacentToEmpty(i){
+  var a=rc(i),b=rc(empty);
+  return Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])===1;
+}
+function inGoal(){
+  for(var i=0;i<tiles.length-1;i++)if(tiles[i]!==i+1)return false;
+  return tiles[tiles.length-1]===-1;
+}
+// Fisher-Yates + 合法洗牌：只做随机空位的合法反向移动，保证必可解
+function shuffleBoard(){
+  var n=N*N;
+  tiles=[];
+  for(var i=0;i<n-1;i++)tiles.push(i+1);
+  tiles.push(-1);
+  empty=n-1;
+  var last=-1,steps=n*n*30;
+  while(steps--){
+    var er=rc(empty)[0],ec=rc(empty)[1],cand=[];
+    if(er>0)cand.push(idx(er-1,ec));
+    if(er<N-1)cand.push(idx(er+1,ec));
+    if(ec>0)cand.push(idx(er,ec-1));
+    if(ec<N-1)cand.push(idx(er,ec+1));
+    // 避免立刻回退
+    if(cand.length>1){var f=cand.indexOf(last);if(f>=0)cand.splice(f,1);}
+    var pick=cand[Math.floor(Math.random()*cand.length)];
+    tiles[empty]=tiles[pick];
+    tiles[pick]=-1;
+    last=empty;
+    empty=pick;
+  }
+  if(inGoal())shuffleBoard();   // 极小概率洗到成品，再来一次
+}
+function render(){
+  for(var i=0;i<cells.length;i++){
+    var v=tiles[i];
+    cells[i].textContent=(v===-1)?"":v;
+    cells[i].className="tile"+(v===-1?" hole":((v===i+1&&v!==-1)?" ok":""));
+  }
+}
+function moveTile(i){
+  if(won)return;
+  if(tiles[i]===-1)return;
+  if(!adjacentToEmpty(i))return;
+  tiles[empty]=tiles[i];
+  tiles[i]=-1;
+  empty=i;
+  moves++;movesEl.textContent=moves;
+  render();
+  if(inGoal()){
+    won=true;
+    msgEl.textContent="拼好了！用了 "+moves+" 步";
+    var old=null;try{old=parseInt(localStorage.getItem(bestKey())||"",10);}catch(e){}
+    if(!old||moves<old){try{localStorage.setItem(bestKey(),String(moves));}catch(e){}}
+    showBest();
+  }
+}
+// 让空位朝 dir('u/d/l/r') 移动 = 拉动其相邻块
+function slideByDir(d){
+  var er=rc(empty)[0],ec=rc(empty)[1],tr=er,tc=ec;
+  if(d==="u")tr=er+1;
+  else if(d==="d")tr=er-1;
+  else if(d==="l")tc=ec+1;
+  else if(d==="r")tc=ec-1;
+  if(tr<0||tr>=N||tc<0||tc>=N)return;
+  moveTile(idx(tr,tc));
+}
+function build(){
+  shuffleBoard();
+  moves=0;won=false;
+  movesEl.textContent="0";
+  msgEl.textContent="";
+  showBest();
+  var btns=document.querySelectorAll(".lv button");
+  for(var i=0;i<btns.length;i++)btns[i].classList.toggle("on",btns[i].getAttribute("data-lv")===String(N));
+  var px=N===3?78:64;
+  boardEl.style.gridTemplateColumns="repeat("+N+","+px+"px)";
+  boardEl.innerHTML="";
+  cells=[];
+  for(i=0;i<N*N;i++){
+    var d=document.createElement("div");
+    d.className="tile";
+    d.style.width=px+"px";d.style.height=px+"px";
+    d.style.fontSize=(N===3?34:26)+"px";
+    d.dataset.i=i;
+    boardEl.appendChild(d);
+    cells.push(d);
+  }
+  render();
+}
+// 点击：点空格相邻块
+boardEl.addEventListener("click",function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.i!==undefined)moveTile(+t.dataset.i);
+});
+// 方向键：移动空位
+document.addEventListener("keydown",function(e){
+  var k=e.key;
+  if(k==="ArrowUp"||k==="w"||k==="W"){slideByDir("u");e.preventDefault();}
+  else if(k==="ArrowDown"||k==="s"||k==="S"){slideByDir("d");e.preventDefault();}
+  else if(k==="ArrowLeft"||k==="a"||k==="A"){slideByDir("l");e.preventDefault();}
+  else if(k==="ArrowRight"||k==="d"||k==="D"){slideByDir("r");e.preventDefault();}
+  else if(k==="r"||k==="R"){build();}
+});
+// 滑屏
+var sx=0,sy=0,down=false;
+boardEl.addEventListener("touchstart",function(e){
+  sx=e.touches[0].clientX;sy=e.touches[0].clientY;down=true;
+},{passive:true});
+boardEl.addEventListener("touchend",function(e){
+  if(!down)return;down=false;
+  var t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+  if(Math.abs(dx)<24&&Math.abs(dy)<24)return;
+  if(Math.abs(dx)>Math.abs(dy))slideByDir(dx>0?"r":"l");
+  else slideByDir(dy>0?"d":"u");
+  e.preventDefault();
+},{passive:false});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){N=+this.getAttribute("data-lv");build();});
+}
+build();
+})();
+</script>
+</body>
+</html>

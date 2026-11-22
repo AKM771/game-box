@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞翔的小鸟 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+canvas{background:#9cdcF2;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.tip{color:#6b6b70;font-size:13px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>飞翔的小鸟</h1>
+<p class="info">分数 <b id="score">0</b> · 最高 <b id="best">0</b></p>
+<canvas id="cv" width="420" height="560"></canvas>
+<p class="tip">空格 / 点一下 / 滑屏 = 扇翅膀往上飞 · 钻管道缝 · 撞管或掉地就结束</p>
+<script>
+(function(){
+"use strict";
+var W=420,H=560;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var scoreEl=document.getElementById("score"),bestEl=document.getElementById("best");
+var GROUND=34;
+var bird,pipes,score,best,over,state,tick,frame;
+var GRAV=0.38,LIFT=-7.2,PIPEW=62,GAP=150,SPEED=2.1,INTERVAL=110;
+
+function loadBest(){try{best=parseInt(localStorage.getItem("flappy_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem("flappy_best",String(best));}catch(e){}}}
+function reset(){
+  bird={x:110,y:H/2,vy:0,r:13,rot:0};
+  pipes=[];score=0;scoreEl.textContent="0";
+  over=false;state="ready";tick=0;frame=0;
+}
+function flap(){
+  if(over){reset();return;}
+  if(state==="ready"){state="play";}
+  bird.vy=LIFT;
+}
+function addPipe(){
+  var margin=70;
+  var topH=margin+Math.random()*(H-GROUND-GAP-margin*2);
+  pipes.push({x:W+10,top:topH,passed:false});
+}
+function die(){
+  over=true;saveBest();
+}
+function step(){
+  frame++;
+  if(state==="ready"){
+    bird.y=H/2+Math.sin(frame/18)*8;
+    bird.vy=0;
+    return;
+  }
+  if(over){
+    bird.vy+=GRAV*0.6;bird.y+=bird.vy;
+    if(bird.y>H-GROUND-bird.r){bird.y=H-GROUND-bird.r;bird.vy=0;}
+    if(bird.rot<Math.PI/2)bird.rot+=0.06;
+    return;
+  }
+  // 鸟
+  bird.vy+=GRAV;bird.y+=bird.vy;
+  if(bird.vy>0.5)bird.rot=Math.min(Math.PI/3,bird.rot+0.04);else bird.rot=-0.3;
+  if(bird.y+bird.r>H-GROUND){bird.y=H-GROUND-bird.r;die();return;}
+  if(bird.y-bird.r<0){bird.y=bird.r;bird.vy=0;}
+  // 管
+  tick++;
+  if(tick>=INTERVAL){tick=0;addPipe();}
+  for(var i=pipes.length-1;i>=0;i--){
+    var p=pipes[i];p.x-=SPEED;
+    if(!p.passed&&p.x+PIPEW<bird.x-bird.r){
+      p.passed=true;score++;scoreEl.textContent=score;
+    }
+    if(p.x+PIPEW<-10)pipes.splice(i,1);
+    // 碰撞
+    var gapY=p.top+GAP;
+    var hitX=bird.x+bird.r>p.x&&bird.x-bird.r<p.x+PIPEW;
+    if(hitX&&(bird.y-bird.r<p.top||bird.y+bird.r>gapY)){die();return;}
+  }
+}
+function drawPipe(x,topH){
+  var gapY=topH+GAP;
+  ctx.fillStyle="#43A047";
+  ctx.fillRect(x,0,PIPEW,topH);
+  ctx.fillRect(x,gapY,PIPEW,H-GROUND-gapY);
+  ctx.fillStyle="#2E7D32";
+  ctx.fillRect(x-4,topH-16,PIPEW+8,16);
+  ctx.fillRect(x-4,gapY,PIPEW+8,16);
+}
+function drawBird(){
+  ctx.save();
+  ctx.translate(bird.x,bird.y);
+  ctx.rotate(bird.rot);
+  // 身体
+  ctx.fillStyle="#FDD835";
+  ctx.beginPath();ctx.ellipse(0,0,bird.r+3,bird.r,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="#1b1b1e";ctx.lineWidth=1.5;ctx.stroke();
+  // 翅膀
+  var wing=Math.sin(frame/4)*4+(bird.vy<-2?-3:2);
+  ctx.fillStyle="#FB8C00";
+  ctx.beginPath();ctx.ellipse(-3,3+wing*0.3,7,4.5,0.3,0,Math.PI*2);ctx.fill();
+  // 眼
+  ctx.fillStyle="#fff";
+  ctx.beginPath();ctx.arc(6,-4,4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#1b1b1e";
+  ctx.beginPath();ctx.arc(7,-4,1.8,0,Math.PI*2);ctx.fill();
+  // 喙
+  ctx.fillStyle="#E53935";
+  ctx.beginPath();ctx.moveTo(11,1);ctx.lineTo(19,4);ctx.lineTo(11,7);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+function drawGround(){
+  ctx.fillStyle="#DEB887";
+  ctx.fillRect(0,H-GROUND,W,GROUND);
+  ctx.fillStyle="#C8A06A";
+  for(var i=0;i<W;i+=24){ctx.fillRect(i,H-GROUND,12,5);}
+}
+function draw(){
+  // 天空
+  ctx.fillStyle="#9cdcF2";ctx.fillRect(0,0,W,H);
+  // 云
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  for(var c=0;c<3;c++){
+    var cx=(W-(frame*(0.3+c*0.12)))%(W+120)+60-120;
+    if(cx<-60)cx+=W+120;
+    ctx.beginPath();ctx.arc(cx,70+c*46,16,0,Math.PI*2);ctx.arc(cx+18,64+c*46,20,0,Math.PI*2);ctx.arc(cx+38,72+c*46,14,0,Math.PI*2);ctx.fill();
+  }
+  for(var i=0;i<pipes.length;i++)drawPipe(pipes[i].x,pipes[i].top);
+  drawGround();
+  drawBird();
+  if(state==="ready"){
+    ctx.fillStyle="rgba(0,0,0,.45)";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#fff";ctx.textAlign="center";
+    ctx.font="bold 26px sans-serif";ctx.fillText("点一下开始",W/2,H/2-10);
+    ctx.font="15px sans-serif";ctx.fillText("再点一下扇翅膀",W/2,H/2+22);
+  }
+  if(over){
+    ctx.fillStyle="rgba(0,0,0,.5)";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#fff";ctx.textAlign="center";
+    ctx.font="bold 26px sans-serif";ctx.fillText("结束 · "+score+" 分",W/2,H/2-10);
+    ctx.font="15px sans-serif";ctx.fillText("点画布重开",W/2,H/2+22);
+  }
+}
+function loop(){
+  step();draw();
+  requestAnimationFrame(loop);
+}
+function pointer(e){
+  e.preventDefault();
+  flap();
+}
+cv.addEventListener("mousedown",function(e){e.preventDefault();flap();});
+cv.addEventListener("touchstart",pointer,{passive:false});
+document.addEventListener("keydown",function(e){
+  if(e.key===" "||e.key==="ArrowUp"||e.key==="Enter"){flap();e.preventDefault();}
+});
+loadBest();reset();loop();
+})();
+</script>
+</body>
+</html>
