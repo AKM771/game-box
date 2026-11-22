@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>色彩记忆 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+#board{display:inline-grid;grid-template-columns:repeat(2,140px);gap:14px}
+.pad{width:140px;height:140px;border:4px solid #cfcfd4;cursor:pointer;-webkit-user-select:none;user-select:none}
+.pad:nth-child(1){background:#43A047;border-radius:70px 8px 8px 8px}
+.pad:nth-child(2){background:#E53935;border-radius:8px 70px 8px 8px}
+.pad:nth-child(3){background:#FDD835;border-radius:8px 8px 8px 70px}
+.pad:nth-child(4){background:#1E88E8;border-radius:8px 8px 70px 8px}
+.pad.on{filter:brightness(1.75);box-shadow:0 0 24px rgba(255,255,255,.9)}
+.pad.bad{filter:brightness(.5) grayscale(1)}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:14px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>色彩记忆</h1>
+<p class="info">回合 <b id="round">0</b> · 最高 <b id="best">0</b></p>
+<div id="board">
+  <div class="pad" data-i="0"></div>
+  <div class="pad" data-i="1"></div>
+  <div class="pad" data-i="2"></div>
+  <div class="pad" data-i="3"></div>
+</div>
+<p class="msg" id="msg">点「开始」，记住亮灯顺序，然后照着按一遍。</p>
+<button id="go">开始</button>
+<p class="tip">每回合多亮一盏 · 按错就结束 · 电脑亮灯时别急着按</p>
+<script>
+(function(){
+"use strict";
+var pads=[].slice.call(document.querySelectorAll(".pad"));
+var roundEl=document.getElementById("round"),bestEl=document.getElementById("best"),
+    msgEl=document.getElementById("msg"),goBtn=document.getElementById("go");
+var seq=[],step=0,phase="idle",best=0,lit=-1,timers=[],inputIdx=0;
+
+function loadBest(){try{best=parseInt(localStorage.getItem("simon_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(step>best){best=step;bestEl.textContent=best;try{localStorage.setItem("simon_best",String(best));}catch(e){}}}
+function clearAll(){timers.forEach(clearTimeout);timers=[];unlight();}
+function unlight(){pads.forEach(function(p){p.classList.remove("on","bad");});lit=-1;}
+function light(i,ms){
+  pads.forEach(function(p){p.classList.remove("on");});
+  pads[i].classList.add("on");
+  lit=i;
+  timers.push(setTimeout(function(){pads[i].classList.remove("on");lit=-1;},ms));
+}
+function showSeq(){
+  phase="show";
+  msgEl.textContent="看仔细…";
+  var i=0, gap=560;
+  var next=function(){
+    if(i>=seq.length){
+      phase="input";inputIdx=0;
+      msgEl.textContent="该你了（第 "+seq.length+" 关）";
+      return;
+    }
+    light(seq[i],Math.max(240,gap-40));
+    i++;
+    timers.push(setTimeout(next,gap));
+  };
+  timers.push(setTimeout(next,500));
+}
+function nextRound(){
+  seq.push(Math.floor(Math.random()*4));
+  roundEl.textContent=seq.length;
+  showSeq();
+}
+function press(i){
+  if(phase!=="input")return;
+  light(i,180);
+  if(seq[inputIdx]===i){
+    inputIdx++;
+    if(inputIdx>=seq.length){
+      phase="between";
+      step=seq.length;
+      saveBest();
+      msgEl.textContent="对了！第 "+seq.length+" 关通过";
+      timers.push(setTimeout(nextRound,900));
+    }
+  }else{
+    // 答错
+    phase="over";
+    pads.forEach(function(p){p.classList.add("bad");});
+    timers.push(setTimeout(function(){
+      unlight();
+      msgEl.textContent="按错了…走到第 "+Math.max(0,seq.length-1)+" 关 · 最高 "+best;
+    },500));
+    goBtn.textContent="再来一局";
+  }
+}
+function start(){
+  clearAll();
+  seq=[];step=0;inputIdx=0;
+  goBtn.textContent="重来";
+  msgEl.textContent="";
+  loadBest();
+  nextRound();
+}
+pads.forEach(function(p){
+  p.addEventListener("click",function(){press(+p.dataset.i);});
+  p.addEventListener("touchstart",function(e){press(+p.dataset.i);e.preventDefault();},{passive:false});
+});
+goBtn.addEventListener("click",start);
+loadBest();
+})();
+</script>
+</body>
+</html>

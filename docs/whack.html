@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打地鼠 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+#grid{display:inline-grid;grid-template-columns:repeat(3,96px);gap:14px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.hole{width:96px;height:96px;border-radius:50%;background:#6b4f2f;border:6px solid #8a6a3a;position:relative;overflow:hidden;cursor:pointer}
+.mole{position:absolute;left:12px;bottom:-74px;width:64px;height:74px;background:#a1754a;border-radius:32px 32px 8px 8px;transition:bottom .16s}
+.hole.up .mole{bottom:6px}
+.hole.boom .mole{background:#d33;bottom:-74px}
+.mole .eye{position:absolute;top:22px;width:8px;height:8px;background:#1b1b1e;border-radius:50%}
+.mole .eye.l{left:16px}.mole .eye.r{right:16px}
+.mole .nose{position:absolute;top:34px;left:26px;width:12px;height:9px;background:#5a3d24;border-radius:50%}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>打地鼠</h1>
+<p class="info">得分 <b id="score">0</b> · 最高 <b id="best">0</b> · 剩余 <b id="time">30</b>s</p>
+<div id="grid">
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+  <div class="hole"><div class="mole"><span class="eye l"></span><span class="eye r"></span><span class="nose"></span></div></div>
+</div>
+<p class="msg" id="msg"></p>
+<button id="go">开始</button>
+<p class="tip">地鼠探头就点 · 30 秒抢分 · 红了=打中 · 金色地鼠分更多</p>
+<script>
+(function(){
+"use strict";
+var holes=[].slice.call(document.querySelectorAll(".hole"));
+var scoreEl=document.getElementById("score"),bestEl=document.getElementById("best"),
+    timeEl=document.getElementById("time"),msgEl=document.getElementById("msg"),
+    goBtn=document.getElementById("go");
+var score,best,left,playing,upTimers=[],spawnTimer=null,clockTimer=null,active=null,goldNext=false;
+
+function loadBest(){try{best=parseInt(localStorage.getItem("whack_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem("whack_best",String(best));}catch(e){}}}
+function clearTimers(){
+  upTimers.forEach(clearTimeout);upTimers=[];
+  if(spawnTimer){clearTimeout(spawnTimer);spawnTimer=null;}
+  if(clockTimer){clearInterval(clockTimer);clockTimer=null;}
+  active=null;
+}
+function hideAll(){holes.forEach(function(h){h.classList.remove("up","boom");h.querySelector(".mole").style.background="";});}
+function hideOne(h){h.classList.remove("up");active=null;}
+function spawn(){
+  if(!playing)return;
+  if(active)hideOne(active);
+  var free=holes.filter(function(h){return !h.classList.contains("up");});
+  if(!free.length){schedule();return;}
+  var h=free[Math.floor(Math.random()*free.length)];
+  var mole=h.querySelector(".mole");
+  goldNext=!goldNext;
+  if(goldNext){mole.style.background="#FDD835";h.dataset.gold="1";}
+  else{h.dataset.gold="0";}
+  h.classList.add("up");
+  active=h;
+  // 探头时长随时间递减：2.1s → 0.85s
+  var upMs=2100-Math.floor((30-left)*38);
+  var t=setTimeout(function(){
+    if(h.classList.contains("up")&&!h.classList.contains("boom"))hideOne(h);
+  },upMs);
+  upTimers.push(t);
+  schedule();
+}
+function schedule(){
+  if(!playing)return;
+  // 间隔 0.55s → 0.3s
+  var gap=550-Math.floor((30-left)*6);
+  spawnTimer=setTimeout(spawn,gap);
+}
+function whack(e){
+  if(!playing)return;
+  var h=e.target.closest(".hole");
+  if(!h||!h.classList.contains("up"))return;
+  if(h.classList.contains("boom"))return;
+  var gold=h.dataset.gold==="1";
+  h.classList.add("boom");
+  score+=gold?3:1;
+  scoreEl.textContent=score;
+  var t=setTimeout(function(){hideOne(h);h.classList.remove("boom");h.dataset.gold="0";},140);
+  upTimers.push(t);
+}
+function start(){
+  clearTimers();hideAll();
+  score=0;left=30;playing=true;
+  scoreEl.textContent="0";timeEl.textContent="30";
+  msgEl.textContent="";goBtn.textContent="重来";
+  loadBest();
+  spawn();
+  clockTimer=setInterval(function(){
+    left--;timeEl.textContent=left;
+    if(left<=0)end();
+  },1000);
+}
+function end(){
+  playing=false;
+  clearTimers();hideAll();
+  msgEl.textContent="时间到！得分 "+score+(score>=best&&score>0?"（新纪录！）":"")+" · 再来一局";
+  saveBest();
+}
+goBtn.addEventListener("click",start);
+document.getElementById("grid").addEventListener("click",whack);
+// 触屏直接点（click 在触屏也会派发，防双发：touch 时不 preventDefault 即可）
+loadBest();timeEl.textContent="30";
+})();
+</script>
+</body>
+</html>

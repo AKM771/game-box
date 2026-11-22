@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>汉诺塔 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+canvas{background:#fff;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button.act{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin:4px 3px 0}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>汉诺塔</h1>
+<p class="info">步数 <b id="moves">0</b> · 最少 <b id="min">31</b> 步 · 最快 <b id="best">--</b> 步</p>
+<div class="lv">
+  <button data-n="3" class="on">3 层</button>
+  <button data-n="4">4 层</button>
+  <button data-n="5">5 层</button>
+</div>
+<canvas id="cv" width="460" height="300"></canvas>
+<p class="msg" id="msg"></p>
+<button class="act" id="undo">悔棋</button>
+<button class="act" id="reset">重来</button>
+<button class="act" id="solve">演示最短解</button>
+<p class="tip">点柱子移最上面一块：先点源柱、再点目标柱，也可直接点带块的柱子接续 · 全挪到最右就赢</p>
+<script>
+(function(){
+"use strict";
+var W=460,H=300,POST=[90,230,370],BASE=264;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var movesEl=document.getElementById("moves"),minEl=document.getElementById("min"),
+    bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
+var n=3,posts,moves,sel,solved,demo=null;
+
+function bestKey(){return "hanoi_best_"+n;}
+function showBest(){
+  var v=null;try{v=localStorage.getItem(bestKey());}catch(e){}
+  bestEl.textContent=(v===null?"--":v);
+}
+function minSteps(){return Math.pow(2,n)-1;}
+function init(){
+  posts=[[],[],[]];
+  for(var i=n;i>=1;i--)posts[0].push(i);   // 底大上小
+  moves=0;sel=-1;solved=false;demo=null;
+  movesEl.textContent="0";
+  minEl.textContent=minSteps();
+  showBest();
+  msgEl.textContent="轮到你（从最左全挪到最右）";
+  draw();
+}
+function topOf(p){return posts[p].length?posts[p][posts[p].length-1]:0;}
+function doMove(from,to){
+  if(from===to||!posts[from].length)return false;
+  if(posts[to].length>=n)return false;
+  if(topOf(to)!==0&&topOf(to)<topOf(from))return false;  // 大压小
+  posts[to].push(posts[from].pop());
+  moves++;movesEl.textContent=moves;
+  draw();
+  checkWin();
+  return true;
+}
+function checkWin(){
+  if(posts[2].length===n){
+    solved=true;sel=-1;
+    msgEl.textContent="完成！"+moves+" 步"+(moves===minSteps()?"（最优解，漂亮！）":"")+" · 理论最少 "+minSteps()+" 步";
+    var old=null;try{old=parseInt(localStorage.getItem(bestKey())||"",10);}catch(e){}
+    if(!old||moves<old){try{localStorage.setItem(bestKey(),String(moves));}catch(e){}}
+    showBest();
+    return true;
+  }
+  return false;
+}
+function pickPost(px){
+  if(demo||solved)return;
+  // 命中柱：选最近的 POST
+  var p=0,bestD=1e9;
+  for(var i=0;i<3;i++){
+    var d=Math.abs(px-POST[i]);
+    if(d<bestD){bestD=d;p=i;}
+  }
+  if(sel<0){
+    if(posts[p].length){sel=p;msgEl.textContent="已选"+cn(p)+"，再点目标柱";}
+  }else{
+    if(sel===p){sel=-1;msgEl.textContent="已取消";}
+    else{
+      if(doMove(sel,p)){sel=-1;msgEl.textContent=solved?"":"好，继续";}
+      else{msgEl.textContent="放不了：大的不能压小的";}
+    }
+  }
+}
+function cn(i){return ["左","中","右"][i];}
+function drawDisk(x,y,w,h,i){
+  var colors=["#E53935","#FB8C00","#FDD835","#43A047","#1E88E8"];
+  ctx.fillStyle=colors[(i-1)%5];
+  var r=8;
+  ctx.beginPath();
+  ctx.moveTo(x-w/2+r,y);
+  ctx.arcTo(x+w/2,y,x+w/2,y+h,r);
+  ctx.arcTo(x+w/2,y+h,x-w/2,y+h,r);
+  ctx.arcTo(x-w/2,y+h,x-w/2,y,r);
+  ctx.arcTo(x-w/2,y,x+w/2,y,r);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,.25)";ctx.lineWidth=1;ctx.stroke();
+}
+function draw(){
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  for(var p=0;p<3;p++){
+    var x=POST[p];
+    // 底座
+    ctx.fillStyle="#c9c9ce";
+    ctx.fillRect(x-72,BASE,144,14);
+    // 柱
+    ctx.fillStyle=sel===p?"#2f5596":"#9a9aa2";
+    ctx.fillRect(x-7,BASE-(n*30+6),14,n*30+6);
+    // 标签
+    ctx.fillStyle="#55555c";ctx.font="14px sans-serif";ctx.textAlign="center";
+    ctx.fillText(cn(p),x,BASE+34);
+    // 盘
+    var stack=posts[p];
+    for(var k=0;k<stack.length;k++){
+      var v=stack[k];
+      var w=40+(v-1)*(128/Math.max(1,n-1));
+      var h=24;
+      var y=BASE-8-k*(h+2)-h;
+      drawDisk(x,y,w,h,v);
+    }
+    if(sel===p){
+      ctx.strokeStyle="#2f5596";ctx.lineWidth=2;
+      ctx.strokeRect(x-74,BASE-(n*30+20),148,n*30+34);
+    }
+  }
+}
+// 解法：递归生成步序
+function solveSeq(k,a,b,c){
+  if(k===0)return [];
+  return solveSeq(k-1,a,c,b).concat([[a,c]],solveSeq(k-1,b,a,c));
+}
+function runDemo(){
+  if(demo)return;
+  var seq=solveSeq(n,0,1,2);
+  var i=0;demo=true;sel=-1;
+  msgEl.textContent="演示中…（共 "+seq.length+" 步）";
+  var step=function(){
+    if(!demo)return;
+    if(i>=seq.length){
+      demo=null;
+      checkWin();
+      return;
+    }
+    var mv=seq[i++];
+    doMove(mv[0],mv[1]);
+    setTimeout(step,280);
+  };
+  step();
+}
+function undo(){
+  if(demo||!moves)return;
+  // 简易悔棋：重置到初始再按已走步数不可回放 → 直接记录栈
+  msgEl.textContent="悔棋：把最后一步退回（演示模式不支持）";
+  if(history.length){
+    var h=history.pop();
+    posts[h.from].push(posts[h.to].pop());
+    moves--;movesEl.textContent=moves;
+    solved=false;
+    draw();
+    msgEl.textContent="已退回上一步";
+  }
+}
+var history=[];
+var origDo=doMove;
+doMove=function(from,to){
+  if(solved)return false;      // demo 由 pickPost 拦，这里只挡终局
+  var ok=origDo(from,to);
+  if(ok)history.push({from:from,to:to});
+  return ok;
+};
+cv.addEventListener("click",function(e){
+  var rect=cv.getBoundingClientRect();
+  var x=(e.clientX-rect.left)*(W/rect.width);
+  pickPost(x);
+});
+cv.addEventListener("touchstart",function(e){
+  var rect=cv.getBoundingClientRect();
+  var t=e.touches[0];
+  var x=(t.clientX-rect.left)*(W/rect.width);
+  pickPost(x);
+  e.preventDefault();
+},{passive:false});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    n=+this.getAttribute("data-n");
+    for(var k=0;k<bl.length;k++)bl[k].classList.toggle("on",bl[k]===this);
+    init();history=[];
+  });
+}
+document.getElementById("undo").addEventListener("click",undo);
+document.getElementById("reset").addEventListener("click",function(){demo=null;init();history=[];});
+document.getElementById("solve").addEventListener("click",function(){demo=null;init();history=[];runDemo();});
+init();history=[];
+})();
+</script>
+</body>
+</html>

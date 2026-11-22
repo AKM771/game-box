@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>五子棋 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+canvas{background:#E8C58A;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>五子棋</h1>
+<p class="info">你执黑先手 · 连五子就赢</p>
+<div class="lv">
+  <button data-d="1" class="on">简单</button>
+  <button data-d="2">普通</button>
+  <button data-d="3">困难</button>
+</div>
+<canvas id="cv" width="480" height="480"></canvas>
+<p class="msg" id="msg"></p>
+<p class="tip">点交叉点落子 · 手机同样点 · R 重开 · 换难度立即重开</p>
+<script>
+(function(){
+"use strict";
+var N=15,CELL=32,PAD=16,SIZE=PAD*2+CELL*(N-1);  // 32+448=480，与 canvas 等宽
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var msgEl=document.getElementById("msg");
+var board,over,diff=1,think=false;   // board: 0空 1我黑 2AI白
+
+function reset(){
+  board=[];
+  for(var r=0;r<N;r++){board.push(new Array(N).fill(0));}
+  over=false;think=false;
+  msgEl.textContent="轮到你（黑）";
+  draw();
+}
+function xy2rc(x,y){
+  var c=Math.round((x-PAD)/CELL),r=Math.round((y-PAD)/CELL);
+  if(r<0||r>=N||c<0||c>=N)return null;
+  if(Math.abs(x-(PAD+c*CELL))>CELL/2||Math.abs(y-(PAD+r*CELL))>CELL/2)return null;
+  return [r,c];
+}
+function dirs(r,c,player,cb){
+  // 四个方向逐格延伸，cb(连续数, 端点信息) 用于胜负与评分
+  var D=[[0,1],[1,0],[1,1],[1,-1]];
+  for(var d=0;d<4;d++){
+    var dr=D[d][0],dc=D[d][1],run=1,openEnds=0;
+    var r1=r+dr,c1=c+dc;
+    while(r1>=0&&r1<N&&c1>=0&&c1<N&&board[r1][c1]===player){run++;r1+=dr;c1+=dc;}
+    if(r1>=0&&r1<N&&c1>=0&&c1<N&&board[r1][c1]===0)openEnds++;
+    var r2=r-dr,c2=c-dc;
+    while(r2>=0&&r2<N&&c2>=0&&c2<N&&board[r2][c2]===player){run++;r2-=dr;c2-=dc;}
+    if(r2>=0&&r2<N&&c2>=0&&c2<N&&board[r2][c2]===0)openEnds++;
+    cb(run,openEnds,d);
+  }
+}
+function isWin(r,c,player){
+  var D=[[0,1],[1,0],[1,1],[1,-1]];
+  for(var d=0;d<4;d++){
+    var dr=D[d][0],dc=D[d][1],run=1;
+    var rr=r+dr,cc=c+dc;
+    while(rr>=0&&rr<N&&cc>=0&&cc<N&&board[rr][cc]===player){run++;rr+=dr;cc+=dc;}
+    rr=r-dr;cc=c-dc;
+    while(rr>=0&&rr<N&&cc>=0&&cc<N&&board[rr][cc]===player){run++;rr-=dr;cc-=dc;}
+    if(run>=5)return true;
+  }
+  return false;
+}
+// 评分：一条线 run 连 + 两端开口 → 分值
+function lineScore(run,open){
+  if(run>=5)return 100000;
+  if(run===4&&open===2)return 10000;
+  if(run===4&&open===1)return 1000;
+  if(run===3&&open===2)return 800;
+  if(run===3&&open===1)return 100;
+  if(run===2&&open===2)return 60;
+  if(run===2&&open===1)return 10;
+  if(run===1&&open===2)return 4;
+  return 1;
+}
+function evalPoint(r,c,player){
+  var s=0;
+  dirs(r,c,player,function(run,open,d){s+=lineScore(run,open);});
+  return s;
+}
+function emptyCellsNear(){
+  var out=[];
+  for(var r=0;r<N;r++)for(var c=0;c<N;c++){
+    if(board[r][c])continue;
+    // 只考虑已有棋子 2 格内的空位（开局全空则取中心）
+    var near=false;
+    for(var dr=-2;dr<=2&&!near;dr++)for(var dc=-2;dc<=2&&!near;dc++){
+      var rr=r+dr,cc=c+dc;
+      if(rr>=0&&rr<N&&cc>=0&&cc<N&&board[rr][cc])near=true;
+    }
+    if(near)out.push([r,c]);
+  }
+  if(!out.length&&!board[7][7])out.push([7,7]);   // 开局取中心；下满了返回空=判平局
+  return out;
+}
+function aiMove(){
+  if(over)return;
+  var cand=emptyCellsNear();
+  var best=null,bestV=-1;
+  for(var i=0;i<cand.length;i++){
+    var r=cand[i][0],c=cand[i][1];
+    // 权重 = 自己连 + 0.6*堵我 + 邻接热度；难度越高比较范围越大
+    var v=evalPoint(r,c,2)+0.6*evalPoint(r,c,1);
+    var adj=0;
+    for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){
+      var rr=r+dr,cc=c+dc;
+      if(dr===0&&dc===0)continue;
+      if(rr>=0&&rr<N&&cc>=0&&cc<N&&board[rr][cc])adj+=1;
+    }
+    v+=adj;
+    if(diff>=2)v+=(Math.random()*8);           // 普通：小随机，避免全同分呆板
+    if(diff===1&&Math.random()<0.35)v+=Math.random()*40;  // 简单：偶尔放水
+    if(v>bestV){bestV=v;best=[r,c];}
+  }
+  if(!best){over=true;msgEl.textContent="平局";return;}
+  board[best[0]][best[1]]=2;
+  draw();
+  if(isWin(best[0],best[1],2)){
+    over=true;msgEl.textContent="AI 赢了 · 按 R 再来";
+    return;
+  }
+  think=false;
+  msgEl.textContent="轮到你（黑）";
+}
+function play(r,c){
+  if(over||think||board[r][c])return;
+  board[r][c]=1;
+  draw();
+  if(isWin(r,c,1)){
+    over=true;msgEl.textContent="你赢了！漂亮 · 按 R 再来";
+    return;
+  }
+  var full=true;
+  for(var i=0;i<N;i++)for(var j=0;j<N;j++)if(!board[i][j])full=false;
+  if(full){over=true;msgEl.textContent="平局";return;}
+  think=true;
+  msgEl.textContent="AI 思考中…";
+  setTimeout(aiMove,260);
+}
+function drawStone(r,c,p){
+  var x=PAD+c*CELL,y=PAD+r*CELL;
+  var g=ctx.createRadialGradient(x-5,y-5,2,x,y,14);
+  if(p===1){g.addColorStop(0,"#666");g.addColorStop(1,"#111");}
+  else{g.addColorStop(0,"#fff");g.addColorStop(1,"#c9c9c9");}
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,y,13,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,.35)";ctx.lineWidth=1;ctx.stroke();
+}
+function draw(){
+  ctx.fillStyle="#E8C58A";ctx.fillRect(0,0,SIZE,SIZE);
+  ctx.strokeStyle="#8a6a3a";ctx.lineWidth=1;
+  for(var i=0;i<N;i++){
+    ctx.beginPath();ctx.moveTo(PAD,PAD+i*CELL);ctx.lineTo(PAD+(N-1)*CELL,PAD+i*CELL);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD+i*CELL,PAD);ctx.lineTo(PAD+i*CELL,PAD+(N-1)*CELL);ctx.stroke();
+  }
+  // 星位
+  ctx.fillStyle="#8a6a3a";
+  var stars=[[3,3],[3,11],[11,3],[11,11],[7,7]];
+  for(i=0;i<stars.length;i++){
+    ctx.beginPath();ctx.arc(PAD+stars[i][1]*CELL,PAD+stars[i][0]*CELL,3.5,0,Math.PI*2);ctx.fill();
+  }
+  for(var r=0;r<N;r++)for(var c=0;c<N;c++)if(board[r][c])drawStone(r,c,board[r][c]);
+}
+function clickAt(e){
+  var rect=cv.getBoundingClientRect();
+  var x=(e.clientX-rect.left)*(SIZE/rect.width);
+  var y=(e.clientY-rect.top)*(SIZE/rect.height);
+  var p=xy2rc(x,y);
+  if(p)play(p[0],p[1]);
+}
+cv.addEventListener("click",clickAt);
+cv.addEventListener("touchstart",function(e){
+  var t=e.touches[0];
+  var rect=cv.getBoundingClientRect();
+  var x=(t.clientX-rect.left)*(SIZE/rect.width);
+  var y=(t.clientY-rect.top)*(SIZE/rect.height);
+  var p=xy2rc(x,y);
+  if(p)play(p[0],p[1]);
+  e.preventDefault();
+},{passive:false});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    diff=+this.getAttribute("data-d");
+    for(var k=0;k<bl.length;k++)bl[k].classList.toggle("on",bl[k]===this);
+    reset();
+  });
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="r"||e.key==="R")reset();
+});
+reset();
+})();
+</script>
+</body>
+</html>
