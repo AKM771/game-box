@@ -27,4 +27,4 @@ python -m http.server 8000
 
 ## 许可
 
-GPL-3.0，见 [LICENSE](LICENSE)。反馈：jjonju361999@qq.com
+私人仓库，暂不开源许可。反馈：jjonju361999@qq.com
