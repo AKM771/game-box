@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>井字棋 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+.mv{margin-bottom:12px}
+.mv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.mv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#board{display:inline-grid;grid-template-columns:repeat(3,110px);gap:10px}
+.cell2{width:110px;height:110px;background:#fff;border:1px solid #d9d9dd;border-radius:10px;font-size:54px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cell2:hover{background:#f0f4ff}
+.cell2.x{color:#2f5596}.cell2.o{color:#E53935}
+.cell2.win{background:#e3f0e3;border-color:#43A047}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:14px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button.act{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>井字棋</h1>
+<p class="info">你先手执 <b style="color:#2f5596">X</b> · 连成一线就赢</p>
+<div class="mv">
+  <button data-m="ai" class="on">对战电脑</button>
+  <button data-m="pvp">双人同屏</button>
+</div>
+<div id="board">
+  <button class="cell2" data-i="0"></button><button class="cell2" data-i="1"></button><button class="cell2" data-i="2"></button>
+  <button class="cell2" data-i="3"></button><button class="cell2" data-i="4"></button><button class="cell2" data-i="5"></button>
+  <button class="cell2" data-i="6"></button><button class="cell2" data-i="7"></button><button class="cell2" data-i="8"></button>
+</div>
+<p class="msg" id="msg">轮到你（X）</p>
+<button class="act" id="reset">重开</button>
+<p class="tip">电脑执 O · 三连=横竖斜 · 平局会提示 · R 重开</p>
+<script>
+(function(){
+"use strict";
+var cells=[].slice.call(document.querySelectorAll(".cell2"));
+var msgEl=document.getElementById("msg");
+var WINS=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+var mode="ai",b,turn,over,timer=null;
+
+function reset(){
+  if(timer){clearTimeout(timer);timer=null;}
+  b=new Array(9).fill(0);   // 0空 1=X 2=O
+  turn=1;over=false;
+  cells.forEach(function(c){c.textContent="";c.className="cell2";c.disabled=false;});
+  msgEl.textContent=mode==="ai"?"轮到你（X）":"轮到 X";
+}
+function winnerOf(p){
+  for(var i=0;i<WINS.length;i++){
+    var w=WINS[i];
+    if(b[w[0]]===p&&b[w[1]]===p&&b[w[2]]===p)return w;
+  }
+  return null;
+}
+function finish(p){
+  over=true;
+  var line=winnerOf(p);
+  if(line){
+    line.forEach(function(i){cells[i].classList.add("win");});
+    if(mode==="ai")msgEl.textContent=p===1?"你赢了！":"电脑赢了 · R 再来";
+    else msgEl.textContent=p===1?"X 赢了！":"O 赢了！";
+  }else{
+    msgEl.textContent="平局 · R 再来";
+  }
+}
+function place(i,p){
+  b[i]=p;
+  cells[i].textContent=p===1?"X":"O";
+  cells[i].classList.add(p===1?"x":"o");
+  var w=winnerOf(p);
+  if(w||b.every(function(v){return v;})){finish(w?p:0);return true;}
+  turn=p===1?2:1;
+  if(mode==="ai"&&turn===2){msgEl.textContent="电脑思考中…";think();}
+  else msgEl.textContent="轮到 "+(turn===1?"X":"O");
+  return false;
+}
+// —— AI：一层搜索，取胜>阻挡>威胁分
+function emptyIdx(){var o=[];for(var i=0;i<9;i++)if(!b[i])o.push(i);return o;}
+function tryMove(p,i){
+  if(b[i])return false;
+  b[i]=p;var w=winnerOf(p);b[i]=0;
+  return !!w;
+}
+function threats(p){
+  // 已有 2 连且第三格空的条数
+  var t=0;
+  for(var k=0;k<WINS.length;k++){
+    var w=WINS[k],mine=0,them=0;
+    for(var j=0;j<3;j++){
+      if(b[w[j]]===p)mine++;
+      else if(b[w[j]]===3-p)them=1;
+    }
+    if(mine===2&&!them)t++;
+  }
+  return t;
+}
+function think(){
+  timer=setTimeout(function(){
+    if(over)return;
+    var e=emptyIdx(),mv=-1,i;
+    for(i=0;i<e.length;i++)if(tryMove(2,e[i])){mv=e[i];break;}          // 我能赢
+    if(mv<0)for(i=0;i<e.length;i++)if(tryMove(1,e[i])){mv=e[i];break;}  // 挡你赢
+    if(mv<0){
+      // 中心>角>边，加少量威胁权重
+      var bestV=-1;
+      for(i=0;i<e.length;i++){
+        var idx=e[i],v=0;
+        if(idx===4)v+=6;
+        if(idx===0||idx===2||idx===6||idx===8)v+=3;
+        b[idx]=2;v+=threats(2)*4;b[idx]=0;   // 造双威胁
+        b[idx]=1;v+=threats(1)*2;b[idx]=0;   // 削你的双威胁
+        v+=Math.random();
+        if(v>bestV){bestV=v;mv=idx;}
+      }
+    }
+    if(mv>=0)place(mv,2);
+  },320);
+}
+function clickCell(e){
+  if(over)return;
+  var el=e.currentTarget,i=+el.dataset.i;
+  if(b[i])return;
+  if(mode==="ai"&&turn!==1)return;
+  place(i,turn);
+}
+cells.forEach(function(c){c.addEventListener("click",clickCell);});
+var bl=document.querySelectorAll(".mv button");
+for(var k=0;k<bl.length;k++){
+  bl[k].addEventListener("click",function(){
+    mode=this.getAttribute("data-m");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    reset();
+  });
+}
+document.getElementById("reset").addEventListener("click",reset);
+document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")reset();});
+reset();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>算 24 点 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 12px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 12px;margin:0 2px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#cards{display:inline-flex;gap:12px;min-height:96px;flex-wrap:wrap;justify-content:center;max-width:96vw}
+.pc{width:66px;height:94px;background:#fff;border:2px solid #d9d9dd;border-radius:9px;font-size:34px;font-weight:700;color:#E53935;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
+.pc.merged{background:#eef3ff;border-color:#90a4ae;color:#1b1b1e;font-size:22px}
+.pc.sel{border-color:#2f5596;background:#e8f0fe;color:#2f5596}
+.pc small{position:absolute;top:4px;right:7px;font-size:12px;font-weight:400;color:#9a9aa2}
+.ops{margin:14px 0 6px}
+.ops button{font:inherit;font-size:20px;width:56px;height:48px;margin:4px;border:1px solid #c9c9ce;background:#fff;border-radius:10px;cursor:pointer;font-weight:700}
+.row2{margin-top:8px}
+.row2 button{font:inherit;padding:8px 20px;border:1px solid #c9c9ce;background:#fff;border-radius:7px;cursor:pointer;margin:4px}
+.msg{min-height:24px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>算 24 点</h1>
+<p class="info">关卡 <b id="stage">1</b> · 连击 <b id="streak">0</b> · 最高连击 <b id="best">0</b></p>
+<div class="lv">
+  <button data-d="0">简单 1-9</button>
+  <button data-d="1" class="on">普通 1-13</button>
+  <button data-d="2">困难 含大小王</button>
+</div>
+<div id="cards"></div>
+<div class="ops">
+  <button data-op="+">+</button>
+  <button data-op="-">−</button>
+  <button data-op="*">×</button>
+  <button data-op="/">÷</button>
+</div>
+<div class="row2">
+  <button id="undo">撤销合并</button>
+  <button id="hint">提示</button>
+  <button id="skip">换一题</button>
+</div>
+<p class="msg" id="msg">点两张牌 → 点运算符 → 合成一张 · 最后凑成 24</p>
+<p class="tip">选两张按一个运算符合成新牌，一直合到剩一张就是最终算式（自动带括号）· 除不尽的小数允许 · 卡住点提示或换题</p>
+<script>
+(function(){
+"use strict";
+var RANKS={0:["A",1],1:["2",2],2:["3",3],3:["4",4],4:["5",5],5:["6",6],6:["7",7],7:["8",8],8:["9",9],9:["10",10],10:["J",11],11:["Q",12],12:["K",13],13:["★",14]};
+var cardsEl=document.getElementById("cards");
+var msgEl=document.getElementById("msg"),stageEl=document.getElementById("stage"),
+    streakEl=document.getElementById("streak"),bestEl=document.getElementById("best");
+var diff=1,stage=1,streak=0,best=0,tiles=[],sel=[],hist=[];
+
+function bestKey(){return "p24_best_"+diff;}
+function loadBest(){try{best=parseInt(localStorage.getItem(bestKey())||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(streak>best){best=streak;bestEl.textContent=best;try{localStorage.setItem(bestKey(),String(best));}catch(e){}}}
+function fmt(x){
+  if(Math.abs(x-Math.round(x))<1e-9)return String(Math.round(x));
+  return String(Math.round(x*100)/100);
+}
+function mkCard(){
+  var maxR=diff===0?8:12;
+  var r=Math.floor(Math.random()*(maxR+1));
+  if(diff===2&&Math.random()<0.12)r=13;
+  var c=RANKS[r];
+  return {label:c[0],val:c[1],merged:false};
+}
+// 判断一组值能否凑 24（回溯枚举，两两合并）
+function solvable(vals){
+  if(vals.length===1)return Math.abs(vals[0]-24)<1e-6;
+  for(var i=0;i<vals.length;i++)for(var j=0;j<vals.length;j++){
+    if(i===j)continue;
+    var rest=[];
+    for(var k=0;k<vals.length;k++)if(k!==i&&k!==j)rest.push(vals[k]);
+    var a=vals[i],b=vals[j];
+    var cands=[a+b,a-b,a*b];
+    if(Math.abs(b)>1e-9)cands.push(a/b);
+    for(var m=0;m<cands.length;m++){
+      if(solvable(rest.concat([cands[m]])))return true;
+    }
+  }
+  return false;
+}
+function deal(){
+  var tries=0;
+  do{
+    tiles=[mkCard(),mkCard(),mkCard(),mkCard()];
+    tries++;
+  }while(!solvable(tiles.map(function(c){return c.val;}))&&tries<800);
+  sel=[];hist=[];
+  render();
+  stageEl.textContent=stage;
+  streakEl.textContent=streak;
+  msgEl.textContent="点两张牌 → 点运算符 → 合成一张 · 最后凑成 24";
+}
+function render(){
+  cardsEl.innerHTML="";
+  for(var i=0;i<tiles.length;i++){
+    (function(idx){
+      var t=tiles[idx];
+      var d=document.createElement("div");
+      d.className="pc"+(t.merged?" merged":"")+(sel.indexOf(idx)>=0?" sel":"");
+      var big=document.createElement("span");
+      big.textContent=t.merged?fmt(t.val):t.label;
+      var small=document.createElement("small");
+      small.textContent=String(idx+1);
+      d.appendChild(big);d.appendChild(small);
+      d.addEventListener("click",function(){onTile(idx);});
+      cardsEl.appendChild(d);
+    })(i);
+  }
+}
+function onTile(i){
+  if(tiles.length<=1)return;
+  var p=sel.indexOf(i);
+  if(p>=0)sel.splice(p,1);
+  else{sel.push(i);if(sel.length>2)sel.shift();}
+  render();
+  if(sel.length===2)
+    msgEl.textContent="已选 "+fmt(tiles[sel[0]].val)+" 和 "+fmt(tiles[sel[1]].val)+"，按运算符";
+  else if(sel.length===1)
+    msgEl.textContent="已选 "+fmt(tiles[sel[0]].val)+"，再点一张";
+}
+function snapshot(){hist.push({tiles:tiles.map(function(t){return {label:t.label,val:t.val,merged:t.merged};})});}
+function onOp(op){
+  if(sel.length!==2){
+    msgEl.textContent="先点两张牌（当前选了 "+sel.length+" 张）";
+    return;
+  }
+  snapshot();
+  var a=tiles[sel[0]],b=tiles[sel[1]];
+  var r;
+  if(op==="+")r=a.val+b.val;
+  else if(op==="-")r=a.val-b.val;
+  else if(op==="*")r=a.val*b.val;
+  else{
+    if(Math.abs(b.val)<1e-9){msgEl.textContent="不能除以 0（这张是 0，换一张或退回）";hist.pop();return;}
+    r=a.val/b.val;
+  }
+  var nt={label:fmt(r),val:r,merged:true};
+  // 移除两张、插入合并结果（按原下标顺序）
+  var hi=Math.max(sel[0],sel[1]),lo=Math.min(sel[0],sel[1]);
+  tiles.splice(hi,1);tiles.splice(lo,1);
+  tiles.push(nt);
+  sel=[];
+  render();
+  msgEl.textContent="合成 "+fmt(r)+" · 剩 "+tiles.length+" 张";
+  if(tiles.length===1){
+    if(Math.abs(r-24)<1e-6)onSolved();
+    else{
+      streak=0;streakEl.textContent=streak;
+      msgEl.textContent="得到 "+fmt(r)+" ≠ 24 · 点「撤销合并」退回重算";
+    }
+  }
+}
+function onSolved(){
+  streak++;streakEl.textContent=streak;
+  saveBest();
+  msgEl.textContent="凑成 24！连击 "+streak+" · 下一题…";
+  setTimeout(function(){stage++;deal();},900);
+}
+function undoStep(){
+  if(tiles.length===1&&Math.abs(tiles[0].val-24)<1e-6)return;  // 已赢不退
+  if(!hist.length){msgEl.textContent="没有可撤销的合并了";return;}
+  tiles=hist.pop().tiles;
+  sel=[];
+  render();
+  msgEl.textContent="已退回一步（剩 "+tiles.length+" 张）";
+}
+function hintBtn(){
+  if(tiles.length===1){msgEl.textContent= (Math.abs(tiles[0].val-24)<1e-6)?"已经凑成 24 了":"已经合完了，撤销一步或换题";return;}
+  msgEl.textContent=solvable(tiles.map(function(t){return t.val;}))?"可以凑成 24（当前这些数有解）":"这组凑不出 24，点「换一题」";
+}
+document.querySelectorAll(".ops button").forEach(function(b){
+  b.addEventListener("click",function(){onOp(this.dataset.op);});
+});
+document.getElementById("undo").addEventListener("click",undoStep);
+document.getElementById("hint").addEventListener("click",hintBtn);
+document.getElementById("skip").addEventListener("click",function(){streak=0;streakEl.textContent=0;deal();});
+document.querySelectorAll(".lv button").forEach(function(b){
+  b.addEventListener("click",function(){
+    diff=+this.getAttribute("data-d");
+    document.querySelectorAll(".lv button").forEach(function(x){x.classList.remove("on");});
+    this.classList.add("on");
+    stage=1;streak=0;loadBest();deal();
+  });
+});
+loadBest();
+deal();
+})();
+</script>
+</body>
+</html>

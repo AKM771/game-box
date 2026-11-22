@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>黑白棋 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.mv{margin-bottom:12px}
+.mv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.mv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+canvas{background:#43A047;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button.act{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>黑白棋</h1>
+<p class="info">你执<b style="color:#1b1b1e">黑</b> · 翻越多对面的越多</p>
+<div class="mv">
+  <button data-m="ai" class="on">对战电脑</button>
+  <button data-m="pvp">双人同屏</button>
+</div>
+<canvas id="cv" width="440" height="440"></canvas>
+<p class="msg" id="msg"></p>
+<button class="act" id="reset">重开</button>
+<p class="tip">点绿色圆点落子（只能翻转夹住的棋子）· 无子可下自动跳过 · 最后子多者胜</p>
+<script>
+(function(){
+"use strict";
+var N=8,CELL=50,SIZE=N*CELL;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var msgEl=document.getElementById("msg");
+var mode="ai",b,turn,over,counts,aiTimer=null;
+
+function reset(){
+  if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
+  b=[];
+  for(var r=0;r<N;r++)b.push(new Array(N).fill(0));
+  b[3][3]=2;b[3][4]=1;b[4][3]=1;b[4][4]=2;   // 黑=1 你, 白=2
+  turn=1;over=false;
+  count();draw();
+  msgEl.textContent="轮到你（黑）";
+}
+function count(){
+  var black=0,white=0;
+  for(var r=0;r<N;r++)for(var c=0;c<N;c++){
+    if(b[r][c]===1)black++;else if(b[r][c]===2)white++;
+  }
+  counts=[black,white];
+}
+var DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+function flips(r,c,p){
+  if(b[r][c])return [];
+  var out=[];
+  for(var d=0;d<8;d++){
+    var dr=DIRS[d][0],dc=DIRS[d][1],line=[],rr=r+dr,cc=c+dc;
+    while(rr>=0&&rr<N&&cc>=0&&cc<N&&b[rr][cc]===3-p){
+      line.push([rr,cc]);rr+=dr;cc+=dc;
+    }
+    if(line.length&&rr>=0&&rr<N&&cc>=0&&cc<N&&b[rr][cc]===p)out=out.concat(line);
+  }
+  return out;
+}
+function movesOf(p){
+  var out=[];
+  for(var r=0;r<N;r++)for(var c=0;c<N;c++){
+    if(!b[r][c]&&flips(r,c,p).length)out.push([r,c]);
+  }
+  return out;
+}
+function place(r,c,p){
+  var f=flips(r,c,p);
+  if(!f.length)return false;
+  b[r][c]=p;
+  for(var i=0;i<f.length;i++)b[f[i][0]][f[i][1]]=p;
+  count();draw();
+  nextTurn(3-p);
+  return true;
+}
+function nextTurn(np){
+  if(movesOf(np).length){
+    turn=np;msg();
+    if(mode==="ai"&&turn===2)think();
+    return;
+  }
+  if(movesOf(3-np).length){
+    turn=3-np;msg((np===1?"你无子可下，":"电脑无子可下，")+"跳过");
+    if(mode==="ai"&&turn===2)think();
+    return;
+  }
+  over=true;
+  var bl=counts[0],wh=counts[1];
+  msgEl.textContent="终局 黑"+bl+" : 白"+wh+" · "+(bl>wh?"你赢了！":(bl<wh?"电脑赢了":"平局"))+" · R 再来";
+}
+function msg(extra){
+  msgEl.textContent=extra||(mode==="ai"?(turn===1?"轮到你（黑）":"电脑思考中…"):("轮到 "+(turn===1?"黑":"白")));
+}
+function think(){
+  if(over)return;
+  aiTimer=setTimeout(function(){
+    var mv=movesOf(2);
+    if(!mv.length){nextTurn(1);return;}
+    // 批量评估：翻子数 + 角/边权重 + 行动力
+    var bestV=-1e9,bestP=null;
+    for(var i=0;i<mv.length;i++){
+      var r=mv[i][0],c=mv[i][1],f=flips(r,c,2).length,v=f;
+      var corner=(r===0||r===7)&&(c===0||c===7);
+      var edge=(r===0||r===7||c===0||c===7);
+      if(corner)v+=120;
+      else if(edge)v+=18;
+      if(r===1||r===6||c===1||c===6)v-=12;   // 角旁危险位
+      // 临时落子评估行动力（f 里全是原黑子=1，记录原值后恢复）
+      b[r][c]=2;
+      for(var k=0;k<f.length;k++)b[f[k][0]][f[k][1]]=2;
+      var opp=movesOf(1).length;
+      b[r][c]=0;
+      for(k=0;k<f.length;k++)b[f[k][0]][f[k][1]]=1;
+      v+=(8-opp)*3;
+      v+=Math.random()*2;
+      if(v>bestV){bestV=v;bestP=[r,c];}
+    }
+    if(bestP)place(bestP[0],bestP[1],2);
+  },420);
+}
+function draw(){
+  for(var r=0;r<N;r++)for(var c=0;c<N;c++){
+    ctx.fillStyle=(r+c)%2?"#3d9141":"#43A047";
+    ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+    if(b[r][c])drawDisc(r,c,b[r][c]);
+  }
+  // 网格
+  ctx.strokeStyle="rgba(0,0,0,.25)";
+  ctx.lineWidth=1;
+  for(var i=0;i<=N;i++){
+    ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,SIZE);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(SIZE,i*CELL);ctx.stroke();
+  }
+  // 合法点提示
+  if(!over&&!(mode==="ai"&&turn===2)){
+    var mv=movesOf(turn);
+    for(i=0;i<mv.length;i++){
+      ctx.strokeStyle="rgba(255,255,255,.8)";ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(mv[i][1]*CELL+CELL/2,mv[i][0]*CELL+CELL/2,7,0,Math.PI*2);ctx.stroke();
+    }
+  }
+  // 计数条
+  ctx.fillStyle="rgba(255,255,255,.92)";
+  ctx.fillRect(4,4,140,26);
+  ctx.fillStyle="#1b1b1e";ctx.font="bold 15px sans-serif";ctx.textAlign="left";
+  ctx.fillText("黑 "+counts[0]+"   白 "+counts[1],14,22);
+}
+function drawDisc(r,c,p){
+  var x=c*CELL+CELL/2,y=r*CELL+CELL/2;
+  var g=ctx.createRadialGradient(x-5,y-5,2,x,y,20);
+  if(p===1){g.addColorStop(0,"#555");g.addColorStop(1,"#000");}
+  else{g.addColorStop(0,"#fff");g.addColorStop(1,"#c9c9c9");}
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,y,19,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,.35)";ctx.stroke();
+}
+cv.addEventListener("click",function(e){
+  if(over||(mode==="ai"&&turn!==1))return;
+  var rect=cv.getBoundingClientRect();
+  var x=(e.clientX-rect.left)*(SIZE/rect.width);
+  var y=(e.clientY-rect.top)*(SIZE/rect.height);
+  var c=Math.floor(x/CELL),r=Math.floor(y/CELL);
+  if(r<0||r>=N||c<0||c>=N)return;
+  place(r,c,turn);
+});
+cv.addEventListener("touchstart",function(e){
+  if(over||(mode==="ai"&&turn!==1))return;
+  var rect=cv.getBoundingClientRect();
+  var t=e.touches[0];
+  var x=(t.clientX-rect.left)*(SIZE/rect.width);
+  var y=(t.clientY-rect.top)*(SIZE/rect.height);
+  var c=Math.floor(x/CELL),r=Math.floor(y/CELL);
+  if(r<0||r>=N||c<0||c>=N)return;
+  place(r,c,turn);
+  e.preventDefault();
+},{passive:false});
+var bl=document.querySelectorAll(".mv button");
+for(var k=0;k<bl.length;k++){
+  bl[k].addEventListener("click",function(){
+    mode=this.getAttribute("data-m");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    reset();
+  });
+}
+document.getElementById("reset").addEventListener("click",reset);
+document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")reset();});
+reset();
+})();
+</script>
+</body>
+</html>

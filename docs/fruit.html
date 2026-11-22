@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>接水果 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+canvas{background:#9cdcF2;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>接水果</h1>
+<p class="info">分数 <b id="score">0</b> · 最高 <b id="best">0</b> · 命 <b id="lives">3</b></p>
+<canvas id="cv" width="420" height="540"></canvas>
+<p class="msg" id="msg"></p>
+<button id="go">开始</button>
+<p class="tip">鼠标/左右键/滑屏 移动篮子 · 接住水果 +1 · 接炸弹 -1 命 · 漏 5 个也结束</p>
+<script>
+(function(){
+"use strict";
+var W=420,H=540;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var scoreEl=document.getElementById("score"),bestEl=document.getElementById("best"),
+    livesEl=document.getElementById("lives"),msgEl=document.getElementById("msg"),goBtn=document.getElementById("go");
+var bx,basketW=86,items,score,best,lives,over,running=false,spawnTimer=null,frame=0,misses=0;
+
+function loadBest(){try{best=parseInt(localStorage.getItem("fruit_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem("fruit_best",String(best));}catch(e){}}}
+function clearSpawn(){if(spawnTimer){clearTimeout(spawnTimer);spawnTimer=null;}}
+function reset(){
+  bx=W/2;items=[];score=0;lives=3;misses=0;over=false;
+  scoreEl.textContent="0";livesEl.textContent="3";
+  msgEl.textContent="GO！躲开炸弹";
+  goBtn.textContent="重来";
+}
+function spawnItem(){
+  if(!running)return;
+  var isBomb=Math.random()<0.22;
+  items.push({
+    x:20+Math.random()*(W-40),
+    y:-20,
+    vy:2.6+Math.random()*1.6+score*0.04,   // 越打越快
+    bomb:isBomb,
+    kind:Math.floor(Math.random()*3),        // 0苹果 1香蕉 2橙
+    rot:Math.random()*6
+  });
+  var gap=Math.max(340,700-score*14);
+  spawnTimer=setTimeout(spawnItem,gap);
+}
+function end(msg){
+  running=false;over=true;clearSpawn();saveBest();
+  msgEl.textContent=msg;goBtn.textContent="再来一局";
+}
+function hitBasket(it){
+  if(it.bomb){
+    lives--;livesEl.textContent=lives;
+    if(lives<=0){end("炸光了…得分 "+score+" · 再来一局");}
+    else msgEl.textContent="boom！-1 命（剩 "+lives+"）";
+  }else{
+    score++;scoreEl.textContent=score;
+    msgEl.textContent="+1";
+  }
+}
+function update(){
+  frame++;
+  if(!running)return;
+  for(var i=items.length-1;i>=0;i--){
+    var it=items[i];
+    it.y+=it.vy;it.rot+=0.05;
+    // 接住判定
+    var by=H-56;
+    if(it.y+14>by&&it.y-14<by+20&&Math.abs(it.x-bx)<basketW/2+8){
+      hitBasket(it);
+      items.splice(i,1);
+      if(!running)return;
+      continue;
+    }
+    if(it.y>H+20){
+      if(!it.bomb){misses++;if(misses>=5){end("漏太多…得分 "+score+" · 再来一局");return;}}
+      items.splice(i,1);
+    }
+  }
+}
+function drawFruit(it){
+  ctx.save();
+  ctx.translate(it.x,it.y);
+  ctx.rotate(Math.sin(it.rot)*0.5);
+  if(it.bomb){
+    ctx.fillStyle="#263238";
+    ctx.beginPath();ctx.arc(0,0,13,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#FB8C00";ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(6,-11);ctx.quadraticCurveTo(14,-18,12,-24);ctx.stroke();
+    ctx.fillStyle="#FDD835";
+    ctx.beginPath();ctx.arc(12,-24,3,0,Math.PI*2);ctx.fill();
+  }else if(it.kind===0){
+    ctx.fillStyle="#E53935";
+    ctx.beginPath();ctx.arc(-6,2,9,0,Math.PI*2);ctx.arc(6,2,9,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#5D4037";ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(3,-15);ctx.stroke();
+    ctx.fillStyle="#43A047";
+    ctx.beginPath();ctx.ellipse(7,-13,5,3,0.5,0,Math.PI*2);ctx.fill();
+  }else if(it.kind===1){
+    ctx.strokeStyle="#FDD835";ctx.lineWidth=8;ctx.lineCap="round";
+    ctx.beginPath();ctx.arc(0,0,11,0.6,2.4);ctx.stroke();
+    ctx.strokeStyle="#F9A825";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,0,11,0.6,2.4);ctx.stroke();
+  }else{
+    ctx.fillStyle="#FB8C00";
+    ctx.beginPath();ctx.arc(0,2,11,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#43A047";
+    ctx.beginPath();ctx.ellipse(2,-9,6,3.5,0.4,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+function draw(){
+  ctx.fillStyle="#9cdcF2";ctx.fillRect(0,0,W,H);
+  // 云
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  for(var c=0;c<2;c++){
+    var cx=(W-(frame*(0.25+c*0.15)))%(W+160)-80+160;
+    if(cx>W+60)cx-=W+160;
+    ctx.beginPath();ctx.arc(cx,60+c*50,16,0,Math.PI*2);ctx.arc(cx+20,54+c*50,20,0,Math.PI*2);ctx.fill();
+  }
+  // 地面
+  ctx.fillStyle="#DEB887";ctx.fillRect(0,H-36,W,36);
+  for(var i=0;i<W;i+=24){ctx.fillStyle="#C8A06A";ctx.fillRect(i,H-36,12,5);}
+  // 篮子
+  var by=H-56;
+  ctx.fillStyle="#8d6e63";
+  ctx.beginPath();
+  ctx.moveTo(bx-basketW/2,by);
+  ctx.lineTo(bx+basketW/2,by);
+  ctx.lineTo(bx+basketW/2-12,by+22);
+  ctx.lineTo(bx-basketW/2+12,by+22);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle="#5d4037";ctx.lineWidth=2;
+  for(var k=1;k<4;k++){
+    var xx=bx-basketW/2+(basketW/4)*k;
+    ctx.beginPath();ctx.moveTo(xx,by);ctx.lineTo(xx+(bx-xx)*0.2,by+22);ctx.stroke();
+  }
+  ctx.fillStyle="#6d4c41";
+  ctx.fillRect(bx-basketW/2-4,by-6,basketW+8,7);
+  // 水果
+  for(i=0;i<items.length;i++)drawFruit(items[i]);
+  if(!running){
+    ctx.fillStyle="rgba(0,0,0,.4)";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#fff";ctx.textAlign="center";
+    ctx.font="bold 26px sans-serif";
+    ctx.fillText(over?"再来一局":"点开始",W/2,H/2);
+  }
+}
+function loop(){update();draw();requestAnimationFrame(loop);}
+function movePointer(clientX){
+  var rect=cv.getBoundingClientRect();
+  var x=(clientX-rect.left)*(W/rect.width);
+  bx=Math.max(basketW/2,Math.min(W-basketW/2,x));
+}
+cv.addEventListener("mousemove",function(e){movePointer(e.clientX);});
+cv.addEventListener("touchmove",function(e){movePointer(e.touches[0].clientX);e.preventDefault();},{passive:false});
+cv.addEventListener("touchstart",function(e){movePointer(e.touches[0].clientX);e.preventDefault();},{passive:false});
+document.addEventListener("keydown",function(e){
+  if(!running)return;
+  if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A"){bx=Math.max(basketW/2,bx-26);e.preventDefault();}
+  if(e.key==="ArrowRight"||e.key==="d"||e.key==="D"){bx=Math.min(W-basketW/2,bx+26);e.preventDefault();}
+});
+function start(){
+  clearSpawn();reset();
+  running=true;
+  spawnItem();
+}
+goBtn.addEventListener("click",start);
+loadBest();livesEl.textContent="3";
+reset();running=false;msgEl.textContent="点「开始」开局";goBtn.textContent="开始";
+loop();
+})();
+</script>
+</body>
+</html>

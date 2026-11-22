@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打字测试 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+.mv{margin-bottom:12px}
+.mv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.mv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+#box{max-width:760px;margin:0 auto;background:#fff;border:1px solid #d9d9dd;border-radius:12px;padding:22px 24px;text-align:left}
+#txt{font:22px/1.9 Consolas,"Courier New",monospace;letter-spacing:1px;word-break:break-word}
+#txt span{color:#9a9aa2}
+#txt span.ok{color:#43A047}
+#txt span.bad{color:#E53935;background:#fdecea;border-radius:3px}
+#txt span.cur{background:#2f5596;color:#fff;border-radius:3px}
+#hud{display:flex;justify-content:center;gap:34px;flex-wrap:wrap;margin:16px 0 4px;font-size:15px;color:#55555c}
+#hud b{font-size:24px;color:#1b1b1e}
+#in{display:block;width:min(700px,92vw);margin:0 auto;font:20px Consolas,monospace;padding:12px 16px;border:2px solid #c9c9ce;border-radius:10px;text-align:left}
+#in:focus{outline:none;border-color:#2f5596}
+.msg{min-height:24px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button.act{font:inherit;padding:8px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:7px;cursor:pointer;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>打字测试</h1>
+<div class="mv">
+  <button data-m="en" class="on">英文短句</button>
+  <button data-m="zh">中文短句</button>
+</div>
+<div id="box"><div id="txt"></div></div>
+<div id="hud">
+  <div>速度<br><b id="wpm">0</b> 字/分</div>
+  <div>准确率<br><b id="acc">100</b>%</div>
+  <div>进度<br><b id="prog">0</b>%</div>
+  <div>最高<br><b id="best">0</b></div>
+</div>
+<input id="in" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="点这里开始打字…">
+<p class="msg" id="msg">照着上面的句子打，打错会标红</p>
+<button class="act" id="next">换一段</button>
+<p class="tip">速度=正确字符数换算字/分 · 错字率实时统计 · 打完自动换下一段 · R 或按钮重出</p>
+<script>
+(function(){
+"use strict";
+var TEXTS={
+  en:[
+    "the quick brown fox jumps over the lazy dog",
+    "practice makes progress not perfection",
+    "keep your hands warm and your mind sharper",
+    "a journey of a thousand miles begins with one step",
+    "simple code is easier to read and to keep",
+    "type a little every day and the speed will come",
+    "water is the driving force of all nature",
+    "the best way to predict the future is to create it"
+  ],
+  zh:[
+    "熟能生巧，多练几天速度就上来了",
+    "把字打好是最基本也最实用的电脑技能",
+    "今天比昨天快一点点就是进步",
+    "心别急，眼睛看着下一段手自然跟上",
+    "代码写得清楚，日后改起来才不头疼",
+    "手指放稳，手腕放平，别耸肩",
+    "慢慢来比较快，欲速则不达",
+    "坚持每天练十分钟效果最好"
+  ]
+};
+var txtEl=document.getElementById("txt"),inEl=document.getElementById("in"),
+    msgEl=document.getElementById("msg");
+var wpmEl=document.getElementById("wpm"),accEl=document.getElementById("acc"),
+    progEl=document.getElementById("prog"),bestEl=document.getElementById("best");
+var mode="en",text="",pos=0,spans=[],startT=0,done=false,wrongCount=0,best=0;
+
+function bestKey(){return "type_best_"+mode;}
+function loadBest(){try{best=parseInt(localStorage.getItem(bestKey())||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(v){if(v>best){best=v;bestEl.textContent=best;try{localStorage.setItem(bestKey(),String(best));}catch(e){}}}
+function newText(){
+  var arr=TEXTS[mode];
+  var t=arr[Math.floor(Math.random()*arr.length)];
+  if(t===text&&arr.length>1)t=arr[(arr.indexOf(t)+1)%arr.length];
+  text=t;pos=0;startT=0;done=false;wrongCount=0;
+  inEl.value="";
+  spans=[];
+  txtEl.innerHTML="";
+  for(var i=0;i<text.length;i++){
+    var s=document.createElement("span");
+    s.textContent=text[i];
+    txtEl.appendChild(s);
+    spans.push(s);
+  }
+  if(spans[0])spans[0].className="cur";
+  hud();
+  msgEl.textContent="照着上面的句子打，打错会标红";
+}
+function hud(){
+  if(!startT){wpmEl.textContent=0;progEl.textContent=0;accEl.textContent=100;return;}
+  var sec=Math.max(0.5,(Date.now()-startT)/1000);
+  // 字/分：按正确字符数（中文=字，英文按词换算简化为 5 字母=1 词）
+  var correct=pos-wrongChars;
+  var units=mode==="en"?correct/5:correct;
+  var wpm=Math.round(units/sec*60);
+  var typed=pos+wrongCount;
+  var acc=typed?Math.max(0,Math.round((typed-wrongCount)/typed*100)):100;
+  wpmEl.textContent=wpm;
+  accEl.textContent=acc;
+  progEl.textContent=Math.round(pos/text.length*100);
+  return {wpm:wpm,acc:acc};
+}
+var wrongChars=0;
+function onInput(){
+  if(done)return;
+  var v=inEl.value;
+  if(!startT&&v)startT=Date.now();
+  if(v.length>text.length){inEl.value=v.slice(0,text.length);v=inEl.value;}
+  // 每次输入全新统计（不累加旧值）
+  var wrong=0;
+  for(var i=0;i<spans.length;i++){
+    var cls="";
+    if(i<v.length){
+      if(matchLoose(v[i],text[i]))cls="ok";
+      else{cls="bad";wrong++;}
+    }
+    if(cls==="bad"&&i===v.length-1)cls+=" cur";      // 新错字高亮红
+    else if(i===v.length)cls="cur";                   // 光标位
+    spans[i].className=cls;
+  }
+  pos=v.length;
+  wrongCount=wrong;
+  wrongChars=wrong;
+  hud();
+  if(v.length===text.length){
+    // 逐字全对才算完成
+    var all=true;
+    for(i=0;i<text.length;i++)if(!(v[i]===text[i]||matchLoose(v[i],text[i]))){all=false;break;}
+    if(all){
+      done=true;
+      var r=hud();
+      saveBest(r?r.wpm:0);
+      msgEl.textContent="这段打完了！"+(r?r.wpm:0)+" 字/分 · 自动换下一段";
+      setTimeout(function(){newText();},1200);
+    }
+  }
+}
+function matchLoose(a,b){
+  return a===b||a.toLowerCase()===b.toLowerCase();
+}
+inEl.addEventListener("input",onInput);
+document.getElementById("next").addEventListener("click",newText);
+document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")newText();});
+var bl=document.querySelectorAll(".mv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    mode=this.getAttribute("data-m");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    loadBest();newText();
+    inEl.placeholder=(mode==="en"?"click here then type...":"点这里开始打字…");
+  });
+}
+loadBest();newText();
+})();
+</script>
+</body>
+</html>

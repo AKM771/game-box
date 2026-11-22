@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>推箱子 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:10px}
+.lv button{font:inherit;font-size:13px;padding:5px 12px;margin:0 2px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+canvas{background:#f0efe9;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button.act{font:inherit;padding:7px 18px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin:4px 3px 0}
+.dpad{margin-top:8px}
+.dpad button{font-size:15px;padding:9px 16px;margin:3px;border:1px solid #c9c9ce;background:#fff;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>推箱子</h1>
+<p class="info">第 <b id="lv">1</b>/<b>6</b> 关 · 步数 <b id="moves">0</b> · 最少 <b id="par">--</b></p>
+<div class="lv" id="lvbtns"></div>
+<canvas id="cv"></canvas>
+<p class="msg" id="msg"></p>
+<button class="act" id="undo">撤销</button>
+<button class="act" id="reset">重开本关</button>
+<div class="dpad">
+  <button data-d="u">↑</button><br>
+  <button data-d="l">←</button><button data-d="d">↓</button><button data-d="r">→</button>
+</div>
+<p class="tip">方向键/WASD/滑屏/下面按钮推动箱子 · 箱子进绿圈就算完成 · 推进死角可撤销 · 全进即过关</p>
+<script>
+(function(){
+"use strict";
+var CELL=44;
+// # 墙   _ 目标   $ 箱子   @ 人   * 箱上目标   + 人上目标   (空格=地板)
+var LEVELS=[
+  {name:"入门",par:1,map:[
+    "######",
+    "#    #",
+    "#  _ #",
+    "#  $ #",
+    "#  @ #",
+    "#    #",
+    "######"]},
+  {name:"两箱",par:6,map:[
+    "#######",
+    "#     #",
+    "# _ _ #",
+    "# $ $ #",
+    "#  @  #",
+    "#######"]},
+  {name:"拐弯",par:7,map:[
+    "#######",
+    "#     #",
+    "#  _  #",
+    "#     #",
+    "# $   #",
+    "#  @  #",
+    "#######"]},
+  {name:"三连推",par:6,map:[
+    "########",
+    "#      #",
+    "# _ _ _#",
+    "# $ $ $#",
+    "#  @   #",
+    "########"]},
+  {name:"上下分流",par:8,map:[
+    "########",
+    "#      #",
+    "# _    #",
+    "# $    #",
+    "#   $  #",
+    "#   _  #",
+    "# @    #",
+    "########"]},
+  {name:"双塔",par:10,map:[
+    "##########",
+    "#        #",
+    "#  _     #",
+    "#        #",
+    "#  $     #",
+    "# @      #",
+    "#     $  #",
+    "#     _  #",
+    "##########"]}
+];
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var lvEl=document.getElementById("lv"),movesEl=document.getElementById("moves"),
+    parEl=document.getElementById("par"),msgEl=document.getElementById("msg"),
+    lvBtns=document.getElementById("lvbtns");
+var level=0,walls,goals,boxes,player,moves,undoStack,rows,cols,solved=false;
+
+function bestKey(i){return "sokoban_best_"+i;}
+function showBest(i){
+  var v=null;try{v=localStorage.getItem(bestKey(i));}catch(e){}
+  return v===null?"--":v;
+}
+function load(i){
+  var L=LEVELS[i];
+  rows=L.map.length;cols=L.map[0].length;
+  walls=[];goals={};boxes={};undoStack=[];moves=0;solved=false;
+  for(var r=0;r<rows;r++){
+    walls.push([]);
+    for(var c=0;c<cols;c++)walls[r].push(L.map[r][c]==="#");
+  }
+  for(r=0;r<rows;r++)for(c=0;c<cols;c++){
+    var ch=L.map[r][c];
+    if(ch==="_"||ch==="*"||ch==="+")goals[r+","+c]=true;
+    if(ch==="$"||ch==="*")boxes[r+","+c]=true;
+    if(ch==="@"||ch==="+")player={r:r,c:c};
+  }
+  cv.width=cols*CELL;cv.height=rows*CELL;
+  lvEl.textContent=(i+1);
+  parEl.textContent=L.par;
+  movesEl.textContent="0";
+  msgEl.textContent="推箱子进绿圈";
+  buildLvBtns();
+  draw();
+}
+function k(r,c){return r+","+c;}
+function isGoal(r,c){return !!goals[k(r,c)];}
+function buildLvBtns(){
+  lvBtns.innerHTML="";
+  for(var i=0;i<LEVELS.length;i++){
+    (function(idx){
+      var b=document.createElement("button");
+      b.textContent=(idx+1)+" "+LEVELS[idx].name;
+      b.className=(idx===level?"on":"");
+      b.addEventListener("click",function(){level=idx;load(level);});
+      lvBtns.appendChild(b);
+    })(i);
+  }
+}
+function pushUndo(boxFrom,boxTo){
+  undoStack.push({pr:player.r,pc:player.c,boxFrom:boxFrom||null,boxTo:boxTo||null});
+}
+function move(dr,dc){
+  if(solved)return;
+  var nr=player.r+dr,nc=player.c+dc;
+  if(nr<0||nr>=rows||nc<0||nc>=cols||walls[nr][nc])return;
+  var key=k(nr,nc);
+  if(boxes[key]){
+    var br=nr+dr,bc=nc+dc;
+    if(br<0||br>=rows||bc<0||bc>=cols||walls[br][bc]||boxes[k(br,bc)])return;  // 推不动
+    delete boxes[key];
+    boxes[k(br,bc)]=true;
+    pushUndo([nr,nc],[br,bc]);
+  }else{
+    pushUndo(null,null);
+  }
+  player.r=nr;player.c=nc;
+  moves++;movesEl.textContent=moves;
+  draw();
+  checkWin();
+}
+function undo(){
+  if(!undoStack.length||solved)return;
+  var u=undoStack.pop();
+  if(u.boxFrom){delete boxes[k(u.boxTo[0],u.boxTo[1])];boxes[k(u.boxFrom[0],u.boxFrom[1])]=true;}
+  player.r=u.pr;player.c=u.pc;
+  moves=Math.max(0,moves-1);
+  movesEl.textContent=moves;
+  draw();
+}
+function boxCount(){
+  var n=0,onGoal=0;
+  for(var key in boxes){n++;var p=key.split(",");if(isGoal(+p[0],+p[1]))onGoal++;}
+  return [n,onGoal];
+}
+function checkWin(){
+  var r=boxCount();
+  if(r[0]>0&&r[0]===r[1]){
+    solved=true;
+    var name="sokoban_best_"+level;
+    var old=null;try{old=parseInt(localStorage.getItem(name)||"",10);}catch(e){}
+    if(!old||moves<old){try{localStorage.setItem(name,String(moves));}catch(e){}}
+    msgEl.textContent="过关！"+moves+" 步"+(moves===LEVELS[level].par?"（并列最少，漂亮！）":"")+" · 最少 "+LEVELS[level].par+" 步";
+    draw();
+    if(level<LEVELS.length-1){
+      setTimeout(function(){level++;load(level);},1400);
+    }else{
+      msgEl.textContent="全 6 关通关！共 "+moves+" 步（本关） · 回上面选关重玩";
+    }
+  }
+}
+function draw(){
+  for(var r=0;r<rows;r++)for(var c=0;c<cols;c++){
+    if(walls[r][c]){
+      ctx.fillStyle="#6d6d72";
+      ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+      ctx.fillStyle="#5a5a5f";
+      ctx.fillRect(c*CELL+3,r*CELL+3,CELL-6,CELL-6);
+      continue;
+    }
+    ctx.fillStyle=(r+c)%2?"#f7f6f1":"#efeee8";
+    ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+    if(isGoal(r,c)){
+      ctx.strokeStyle="#43A047";ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(c*CELL+CELL/2,r*CELL+CELL/2,CELL/2-8,0,Math.PI*2);ctx.stroke();
+    }
+  }
+  // 箱子
+  for(var key in boxes){
+    var p=key.split(","),rr=+p[0],cc=+p[1];
+    var x=cc*CELL,y=rr*CELL;
+    ctx.fillStyle=isGoal(rr,cc)?"#8bc34a":"#c68b4e";
+    ctx.beginPath();
+    ctx.moveTo(x+7,y+7);ctx.lineTo(x+CELL-7,y+7);ctx.lineTo(x+CELL-7,y+CELL-7);ctx.lineTo(x+7,y+CELL-7);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,.35)";ctx.lineWidth=2;ctx.stroke();
+    ctx.strokeStyle="rgba(255,255,255,.5)";ctx.lineWidth=2;
+    ctx.strokeRect(x+14,y+14,CELL-28,CELL-28);
+  }
+  // 人
+  var px=player.c*CELL,py=player.r*CELL;
+  ctx.fillStyle="#2f5596";
+  ctx.beginPath();ctx.arc(px+CELL/2,py+CELL/2,CELL/2-7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#fff";
+  ctx.beginPath();ctx.arc(px+CELL/2-6,py+CELL/2-4,3,0,Math.PI*2);ctx.arc(px+CELL/2+6,py+CELL/2-4,3,0,Math.PI*2);ctx.fill();
+  if(solved){
+    ctx.fillStyle="rgba(67,160,71,.18)";ctx.fillRect(0,0,cv.width,cv.height);
+  }
+}
+var KEYS={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1],
+          w:[-1,0],W:[-1,0],s:[1,0],S:[1,0],a:[0,-1],A:[0,-1],d:[0,1],D:[0,1]};
+document.addEventListener("keydown",function(e){
+  if(KEYS[e.key]){move(KEYS[e.key][0],KEYS[e.key][1]);e.preventDefault();}
+  if(e.key==="z"||e.key==="Z"){undo();e.preventDefault();}
+  if(e.key==="r"||e.key==="R"){load(level);}
+});
+var DIRC={u:[-1,0],d:[1,0],l:[0,-1],r:[0,1]};
+[].slice.call(document.querySelectorAll(".dpad button")).forEach(function(b){
+  b.addEventListener("click",function(){var d=DIRC[this.dataset.d];move(d[0],d[1]);});
+});
+document.getElementById("undo").addEventListener("click",undo);
+document.getElementById("reset").addEventListener("click",function(){load(level);});
+var sx=0,sy=0;
+cv.addEventListener("touchstart",function(e){sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+cv.addEventListener("touchend",function(e){
+  var t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+  if(Math.abs(dx)<24&&Math.abs(dy)<24)return;
+  if(Math.abs(dx)>Math.abs(dy))move(0,dx>0?1:-1);
+  else move(dy>0?1:-1,0);
+  e.preventDefault();
+},{passive:false});
+load(0);
+})();
+</script>
+</body>
+</html>

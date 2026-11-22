@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>双人贪吃蛇 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 12px}
+.p1{color:#1E88E8}.p2{color:#E53935}
+canvas{background:#1b1b1e;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>双人贪吃蛇</h1>
+<p class="info"><span class="p1">玩家1 分 <b id="s1">0</b></span> · <span class="p2">玩家2 分 <b id="s2">0</b></span></p>
+<canvas id="cv" width="440" height="440"></canvas>
+<p class="msg" id="msg"></p>
+<button id="go">开始</button>
+<p class="tip"><span class="p1">玩家1：WASD</span> · <span class="p2">玩家2：方向键</span> · 吃果子各 +1 · 撞墙/互撞即结束 · 手机点按钮转向</p>
+<div style="margin-top:10px">
+  <button class="mob" data-p="1" data-d="u">P1↑</button>
+  <button class="mob" data-p="1" data-d="l">P1←</button>
+  <button class="mob" data-p="1" data-d="d">P1↓</button>
+  <button class="mob" data-p="1" data-d="r">P1→</button>
+</div>
+<div style="margin-top:6px">
+  <button class="mob" data-p="2" data-d="u">P2↑</button>
+  <button class="mob" data-p="2" data-d="l">P2←</button>
+  <button class="mob" data-p="2" data-d="d">P2↓</button>
+  <button class="mob" data-p="2" data-d="r">P2→</button>
+</div>
+<style>.mob{font-size:12px;padding:6px 10px;margin:2px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}</style>
+<script>
+(function(){
+"use strict";
+var N=22,CELL=20,W=N*CELL;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var s1El=document.getElementById("s1"),s2El=document.getElementById("s2"),
+    msgEl=document.getElementById("msg"),goBtn=document.getElementById("go");
+var snakes,dir,queued,food,running=false,timer=null,dead;
+
+function reset(){
+  snakes=[
+    {body:[{x:5,y:11},{x:4,y:11},{x:3,y:11}],color:"#1E88E8",score:0,alive:true},
+    {body:[{x:16,y:11},{x:15,y:11},{x:14,y:11}],color:"#E53935",score:0,alive:true}
+  ];
+  dir=[{x:1,y:0},{x:-1,y:0}];
+  queued=[{x:1,y:0},{x:-1,y:0}];
+  dead=false;
+  placeFood();
+  s1El.textContent="0";s2El.textContent="0";
+  msgEl.textContent="GO！别撞墙别互咬";
+  goBtn.textContent="重来";
+  draw();
+}
+function placeFood(){
+  var ok=false;
+  while(!ok){
+    var x=Math.floor(Math.random()*N),y=Math.floor(Math.random()*N),hit=false;
+    for(var s=0;s<2;s++)for(var i=0;i<snakes[s].body.length;i++){
+      if(snakes[s].body[i].x===x&&snakes[s].body[i].y===y)hit=true;
+    }
+    if(!hit){food={x:x,y:y};ok=true;}
+  }
+}
+function setDir(p,d){
+  var D={u:{x:0,y:-1},d:{x:0,y:1},l:{x:-1,y:0},r:{x:1,y:0}};
+  var nd=D[d],cd=dir[p-1];
+  if(nd.x===-cd.x&&nd.y===-cd.y)return;   // 不许掉头
+  queued[p-1]=nd;
+}
+function endGame(msg){
+  running=false;dead=true;
+  if(timer){clearInterval(timer);timer=null;}
+  msgEl.textContent=msg;
+  goBtn.textContent="再来一局";
+}
+function tick(){
+  var aliveCount=0;
+  for(var p=0;p<2;p++){
+    if(!snakes[p].alive)continue;
+    dir[p]=queued[p];
+    var head={x:snakes[p].body[0].x+dir[p].x,y:snakes[p].body[0].y+dir[p].y};
+    // 撞墙
+    if(head.x<0||head.y<0||head.x>=N||head.y>=N){snakes[p].alive=false;continue;}
+    // 撞自己
+    for(var i=0;i<snakes[p].body.length;i++){
+      if(snakes[p].body[i].x===head.x&&snakes[p].body[i].y===head.y){snakes[p].alive=false;break;}
+    }
+    if(!snakes[p].alive)continue;
+    // 撞对方（头对头算互撞，双方死）
+    for(var q=0;q<2;q++){
+      if(q===p||!snakes[q].alive)continue;
+      for(i=0;i<snakes[q].body.length;i++){
+        if(snakes[q].body[i].x===head.x&&snakes[q].body[i].y===head.y){snakes[p].alive=false;break;}
+      }
+      if(!snakes[p].alive)break;
+    }
+    if(!snakes[p].alive)continue;
+    snakes[p].body.unshift(head);
+    if(head.x===food.x&&head.y===food.y){
+      snakes[p].score++;
+      (p===0?s1El:s2El).textContent=snakes[p].score;
+      placeFood();
+    }else{
+      snakes[p].body.pop();
+    }
+  }
+  // 终局判定
+  var a0=snakes[0].alive,a1=snakes[1].alive;
+  if(!a0&&!a1){draw();endGame("同归于尽！"+snakes[0].score+" : "+snakes[1].score);return;}
+  if(!a0){draw();endGame("玩家2 获胜 "+snakes[1].score+" : "+snakes[0].score);return;}
+  if(!a1){draw();endGame("玩家1 获胜 "+snakes[0].score+" : "+snakes[1].score);return;}
+  draw();
+}
+function drawCell(x,y,color,head){
+  ctx.fillStyle=color;
+  var r=head?4:3;
+  ctx.beginPath();
+  ctx.moveTo(x*CELL+2+r,y*CELL+2);
+  ctx.arcTo(x*CELL+CELL-2,y*CELL+2,x*CELL+CELL-2,y*CELL+CELL-2,r);
+  ctx.arcTo(x*CELL+CELL-2,y*CELL+CELL-2,x*CELL+2,y*CELL+CELL-2,r);
+  ctx.arcTo(x*CELL+2,y*CELL+CELL-2,x*CELL+2,y*CELL+2,r);
+  ctx.arcTo(x*CELL+2,y*CELL+2,x*CELL+CELL-2,y*CELL+2,r);
+  ctx.closePath();ctx.fill();
+}
+function draw(){
+  ctx.fillStyle="#1b1b1e";ctx.fillRect(0,0,W,W);
+  ctx.strokeStyle="rgba(255,255,255,.05)";
+  for(var i=1;i<N;i++){
+    ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,W);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(W,i*CELL);ctx.stroke();
+  }
+  // 食物
+  ctx.fillStyle="#FDD835";
+  ctx.beginPath();ctx.arc(food.x*CELL+CELL/2,food.y*CELL+CELL/2,6,0,Math.PI*2);ctx.fill();
+  for(var p=0;p<2;p++){
+    var s=snakes[p];
+    for(var k=s.body.length-1;k>=0;k--){
+      drawCell(s.body[k].x,s.body[k].y,s.alive?s.color:(p===0?"#0d47a1":"#7f0000"),k===0);
+    }
+    // 眼
+    if(s.alive){
+      var h=s.body[0];
+      ctx.fillStyle="#fff";
+      ctx.fillRect(h.x*CELL+CELL/2-5+dir[p].x*4,h.y*CELL+CELL/2-5+dir[p].y*4,4,4);
+    }
+  }
+  if(dead){
+    ctx.fillStyle="rgba(0,0,0,.5)";ctx.fillRect(0,0,W,W);
+  }
+}
+function start(){
+  if(timer){clearInterval(timer);timer=null;}
+  reset();
+  running=true;
+  timer=setInterval(tick,130);
+}
+document.addEventListener("keydown",function(e){
+  var k=e.key;
+  if(k==="w"||k==="W"){setDir(1,"u");e.preventDefault();}
+  else if(k==="s"||k==="S"){setDir(1,"d");e.preventDefault();}
+  else if(k==="a"||k==="A"){setDir(1,"l");e.preventDefault();}
+  else if(k==="d"||k==="D"){setDir(1,"r");e.preventDefault();}
+  else if(k==="ArrowUp"){setDir(2,"u");e.preventDefault();}
+  else if(k==="ArrowDown"){setDir(2,"d");e.preventDefault();}
+  else if(k==="ArrowLeft"){setDir(2,"l");e.preventDefault();}
+  else if(k==="ArrowRight"){setDir(2,"r");e.preventDefault();}
+});
+[].slice.call(document.querySelectorAll(".mob")).forEach(function(b){
+  b.addEventListener("click",function(){setDir(+this.dataset.p,this.dataset.d);});
+});
+goBtn.addEventListener("click",start);
+reset();
+msgEl.textContent="点「开始」开局";
+goBtn.textContent="开始";
+running=false;
+})();
+</script>
+</body>
+</html>

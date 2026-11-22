@@ -10,7 +10,10 @@ body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Sego
 .top{padding:14px}
 .top a{color:#2f5596;text-decoration:none;font-size:14px}
 h1{font-size:20px;margin:10px 0 6px}
-.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:12px}
+.lv button{font:inherit;font-size:13px;padding:5px 14px;margin:0 3px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
 #board{display:inline-grid;grid-template-columns:repeat(2,140px);gap:14px}
 .pad{width:140px;height:140px;border:4px solid #cfcfd4;cursor:pointer;-webkit-user-select:none;user-select:none}
 .pad:nth-child(1){background:#43A047;border-radius:70px 8px 8px 8px}
@@ -21,13 +24,18 @@ h1{font-size:20px;margin:10px 0 6px}
 .pad.bad{filter:brightness(.5) grayscale(1)}
 .msg{min-height:22px;color:#2f5596;font-weight:600;margin:14px 0 4px}
 .tip{color:#6b6b70;font-size:13px;margin-top:6px}
-button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
+button.go{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer;margin-top:6px}
 </style>
 </head>
 <body>
 <div class="top"><a href="index.html">← 小游戏合集</a></div>
 <h1>色彩记忆</h1>
-<p class="info">回合 <b id="round">0</b> · 最高 <b id="best">0</b></p>
+<p class="info">回合 <b id="round">0</b> · 最高 <b id="best">0</b> · 机会 <b id="lives">--</b></p>
+<div class="lv">
+  <button data-d="0">简单（慢灯 3 条命）</button>
+  <button data-d="1" class="on">普通（中速 1 命）</button>
+  <button data-d="2">困难（快灯 1 命，高关连亮）</button>
+</div>
 <div id="board">
   <div class="pad" data-i="0"></div>
   <div class="pad" data-i="1"></div>
@@ -35,73 +43,104 @@ button{font:inherit;padding:7px 22px;border:1px solid #c9c9ce;background:#fff;bo
   <div class="pad" data-i="3"></div>
 </div>
 <p class="msg" id="msg">点「开始」，记住亮灯顺序，然后照着按一遍。</p>
-<button id="go">开始</button>
-<p class="tip">每回合多亮一盏 · 按错就结束 · 电脑亮灯时别急着按</p>
+<button class="go" id="go">开始</button>
+<p class="tip">每回合多亮一盏 · 简单档给 3 次容错 · 困难档第 5 关起每轮末尾连亮两盏，16 关起亮灯更快 · 电脑亮灯时别按</p>
 <script>
 (function(){
 "use strict";
+var CFG=[
+  {on:480,gap:760,lives:3,seqBoost:0,lateGap:0},   // 简单
+  {on:400,gap:560,lives:1,seqBoost:0,lateGap:0},   // 普通
+  {on:300,gap:430,lives:1,seqBoost:5,lateGap:16}   // 困难
+];
 var pads=[].slice.call(document.querySelectorAll(".pad"));
 var roundEl=document.getElementById("round"),bestEl=document.getElementById("best"),
-    msgEl=document.getElementById("msg"),goBtn=document.getElementById("go");
-var seq=[],step=0,phase="idle",best=0,lit=-1,timers=[],inputIdx=0;
+    msgEl=document.getElementById("msg"),goBtn=document.getElementById("go"),
+    livesEl=document.getElementById("lives");
+var seq=[],diff=1,phase="idle",best=0,inputIdx=0,timers=[],lives=1,round=0;
 
-function loadBest(){try{best=parseInt(localStorage.getItem("simon_best")||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
-function saveBest(){if(step>best){best=step;bestEl.textContent=best;try{localStorage.setItem("simon_best",String(best));}catch(e){}}}
+function cfg(){return CFG[diff];}
+function loadBest(){try{best=parseInt(localStorage.getItem("simon_best_"+diff)||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(round-1>best){best=round-1;bestEl.textContent=best;try{localStorage.setItem("simon_best_"+diff,String(best));}catch(e){}}}
 function clearAll(){timers.forEach(clearTimeout);timers=[];unlight();}
-function unlight(){pads.forEach(function(p){p.classList.remove("on","bad");});lit=-1;}
+function unlight(){pads.forEach(function(p){p.classList.remove("on","bad");});}
 function light(i,ms){
   pads.forEach(function(p){p.classList.remove("on");});
   pads[i].classList.add("on");
-  lit=i;
-  timers.push(setTimeout(function(){pads[i].classList.remove("on");lit=-1;},ms));
+  timers.push(setTimeout(function(){pads[i].classList.remove("on");},ms));
 }
 function showSeq(){
   phase="show";
   msgEl.textContent="看仔细…";
-  var i=0, gap=560;
+  var c=cfg(),i=0;
+  var gap=c.gap;
+  if(diff===2&&seq.length>c.lateGap)gap=c.gap-90;   // 高关再提速
   var next=function(){
     if(i>=seq.length){
-      phase="input";inputIdx=0;
-      msgEl.textContent="该你了（第 "+seq.length+" 关）";
+      // 困难：高关连亮一盏（序列后追加）
+      if(diff===2&&seq.length>=c.seqBoost){
+        var extra=Math.floor(Math.random()*4);
+        light(extra,Math.max(200,c.on-60));
+        timers.push(setTimeout(function(){inputPhase(extra);},gap));
+        return;
+      }
+      inputPhase(null);
       return;
     }
-    light(seq[i],Math.max(240,gap-40));
+    light(seq[i],Math.max(220,c.on-10));
     i++;
     timers.push(setTimeout(next,gap));
   };
-  timers.push(setTimeout(next,500));
+  timers.push(setTimeout(next,480));
+}
+function inputPhase(extra){
+  phase="input";inputIdx=0;
+  pendingExtra=extra;
+  msgEl.textContent="该你了（第 "+seq.length+" 关"+(extra!==null?"，含隐藏的一盏":"")+"）";
+}
+var pendingExtra=null;
+function fullSeq(){
+  return pendingExtra===null?seq:seq.concat([pendingExtra]);
 }
 function nextRound(){
   seq.push(Math.floor(Math.random()*4));
-  roundEl.textContent=seq.length;
+  round=seq.length;
+  roundEl.textContent=round;
   showSeq();
 }
 function press(i){
   if(phase!=="input")return;
-  light(i,180);
-  if(seq[inputIdx]===i){
+  light(i,170);
+  var want=fullSeq();
+  if(want[inputIdx]===i){
     inputIdx++;
-    if(inputIdx>=seq.length){
+    if(inputIdx>=want.length){
       phase="between";
-      step=seq.length;
       saveBest();
       msgEl.textContent="对了！第 "+seq.length+" 关通过";
-      timers.push(setTimeout(nextRound,900));
+      timers.push(setTimeout(nextRound,850));
     }
   }else{
-    // 答错
-    phase="over";
-    pads.forEach(function(p){p.classList.add("bad");});
-    timers.push(setTimeout(function(){
-      unlight();
-      msgEl.textContent="按错了…走到第 "+Math.max(0,seq.length-1)+" 关 · 最高 "+best;
-    },500));
-    goBtn.textContent="再来一局";
+    lives--;
+    if(lives>0){
+      phase="between";
+      msgEl.textContent="按错了！还剩 "+lives+" 条命，重看一遍";
+      timers.push(setTimeout(showSeq,900));
+    }else{
+      phase="over";
+      pads.forEach(function(p){p.classList.add("bad");});
+      timers.push(setTimeout(function(){
+        unlight();
+        msgEl.textContent="结束 · 走到第 "+seq.length+" 关 · 最高 "+best;
+      },500));
+      goBtn.textContent="再来一局";
+    }
   }
 }
 function start(){
   clearAll();
-  seq=[];step=0;inputIdx=0;
+  seq=[];inputIdx=0;round=0;lives=cfg().lives;
+  livesEl.textContent=lives;
   goBtn.textContent="重来";
   msgEl.textContent="";
   loadBest();
@@ -112,7 +151,16 @@ pads.forEach(function(p){
   p.addEventListener("touchstart",function(e){press(+p.dataset.i);e.preventDefault();},{passive:false});
 });
 goBtn.addEventListener("click",start);
-loadBest();
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    diff=+this.getAttribute("data-d");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    start();
+  });
+}
+document.addEventListener("keydown",function(e){if(e.key==="r"||e.key==="R")start();});
+loadBest();livesEl.textContent="--";
 })();
 </script>
 </body>

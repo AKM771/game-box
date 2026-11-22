@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记数字 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 14px}
+#stage2{background:#fff;border:1px solid #d9d9dd;border-radius:14px;padding:26px 24px;min-width:280px;max-width:94vw;margin:0 auto}
+#num{font-size:46px;font-weight:700;letter-spacing:7px;color:#1b1b1e;min-height:60px;word-break:break-all}
+#num.hide{color:#2f5596}
+#in{font:inherit;font-size:30px;text-align:center;letter-spacing:6px;padding:10px 14px;width:240px;border:2px solid #c9c9ce;border-radius:10px;margin-top:16px}
+#in:focus{outline:none;border-color:#2f5596}
+.msg{min-height:26px;color:#2f5596;font-weight:600;margin:14px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+button{font:inherit;padding:8px 24px;border:1px solid #c9c9ce;background:#fff;border-radius:8px;cursor:pointer;margin-top:8px}
+.lv{margin-bottom:12px}
+.lv button{font-size:13px;padding:5px 12px;margin:0 2px}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>记数字</h1>
+<p class="info">关卡 <b id="stage">1</b> · 位数 <b id="len">3</b> · 最高 <b id="best">0</b> 位 · 连击 <b id="streak">0</b></p>
+<div class="lv">
+  <button data-d="0" class="on">数字</button>
+  <button data-d="1">数字+字母</button>
+</div>
+<div id="stage2">
+  <div id="num"></div>
+  <input id="in" maxlength="30" autocomplete="off" placeholder="" disabled>
+  <p class="msg" id="msg"></p>
+  <button id="go">开始</button>
+</div>
+<p class="tip">屏幕上显示 → 倒计时结束遮住 → 你默写出来 · 每过一关多一位 · 键盘回车提交 · 点「开始」开局</p>
+<script>
+(function(){
+"use strict";
+var numEl=document.getElementById("num"),inEl=document.getElementById("in"),
+    msgEl=document.getElementById("msg"),goEl=document.getElementById("go");
+var stageEl=document.getElementById("stage"),lenEl=document.getElementById("len"),
+    bestEl=document.getElementById("best"),streakEl=document.getElementById("streak");
+var mode=0,stage=1,len=3,streak=0,best=0,answer="",showing=false,timer=null,count=null,phase="idle";
+
+function bestKey(){return "digit_best_"+mode;}
+function loadBest(){try{best=parseInt(localStorage.getItem(bestKey())||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(len-1>best){best=len-1;bestEl.textContent=best;try{localStorage.setItem(bestKey(),String(best));}catch(e){}}}
+var ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ";   // 去掉易混的 I O
+function gen(){
+  var out="",n=mode===0?10:36;
+  for(var i=0;i<len;i++){
+    if(mode===0)out+=String(Math.floor(Math.random()*10));
+    else{
+      if(Math.random()<0.5)out+=String(Math.floor(Math.random()*10));
+      else out+=ALPHA[Math.floor(Math.random()*ALPHA.length)];
+    }
+  }
+  return out;
+}
+function showPhase(){
+  answer=gen();
+  phase="show";showing=true;
+  inEl.disabled=true;inEl.value="";
+  numEl.textContent=answer;
+  numEl.classList.remove("hide");
+  goEl.textContent="记住…";
+  var t=2+Math.min(4,Math.floor(len/3));   // 显示秒数：随长度增长
+  msgEl.textContent="背下来！"+t+" 秒后遮住";
+  count=setInterval(function(){
+    t--;if(t>0)msgEl.textContent="背下来！"+t+" 秒后遮住";
+  },1000);
+  timer=setInterval(function(){
+    clearInterval(timer);timer=null;
+    clearInterval(count);count=null;
+    hidePhase();
+  },t*1000);
+}
+function hidePhase(){
+  phase="input";showing=false;
+  numEl.textContent="?".repeat(len);
+  numEl.classList.add("hide");
+  inEl.disabled=false;
+  inEl.maxLength=len;
+  inEl.focus();
+  msgEl.textContent="输入刚才的 "+len+" 位，回车提交";
+  goEl.textContent="提交";
+}
+function submit(){
+  var v=(inEl.value||"").toUpperCase().replace(/\s+/g,"");
+  if(v.length<len){msgEl.textContent="还差 "+(len-v.length)+" 位";return;}
+  if(v===answer){
+    streak++;streakEl.textContent=streak;
+    saveBest();
+    msgEl.textContent="正确！"+answer+" · "+(streak>=3?"连击 "+streak+"，下一关 +1 位":"下一关多一位");
+    phase="idle";goEl.textContent="下一关";
+    inEl.disabled=true;
+  }else{
+    streak=0;streakEl.textContent=streak;
+    msgEl.textContent="错了…是 "+answer+" · 从头再来（点开始）";
+    phase="idle";goEl.textContent="再试一次";
+    inEl.disabled=true;
+  }
+}
+function next(){
+  if(phase==="idle"&&(msgEl.textContent.indexOf("正确")===0)){
+    len=Math.min(24,len+1);stage++;
+  }else if(phase==="idle"&&msgEl.textContent.indexOf("错了")===0){
+    len=3;stage=1;
+  }else{
+    len=3;stage=1;streak=0;streakEl.textContent=0;
+  }
+  stageEl.textContent=stage;
+  lenEl.textContent=len;
+  showPhase();
+}
+function start(){
+  if(timer){clearInterval(timer);timer=null;}
+  if(count){clearInterval(count);count=null;}
+  len=3;stage=1;streak=0;
+  stageEl.textContent=1;streakEl.textContent=0;
+  loadBest();
+  showPhase();
+}
+goEl.addEventListener("click",function(){
+  if(phase==="show")return;
+  if(phase==="input")submit();
+  else next();
+});
+inEl.addEventListener("keydown",function(e){
+  if(e.key==="Enter"){e.preventDefault();if(phase==="input")submit();}
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="r"||e.key==="R"){start();}
+});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    mode=+this.getAttribute("data-d");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    start();
+  });
+}
+lenEl.textContent=len;
+loadBest();
+})();
+</script>
+</body>
+</html>

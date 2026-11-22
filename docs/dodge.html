@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>躲避来车 — 小游戏合集</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+.top{padding:14px}
+.top a{color:#2f5596;text-decoration:none;font-size:14px}
+h1{font-size:20px;margin:10px 0 6px}
+.info{color:#55555c;font-size:14px;margin:6px 0 10px}
+.lv{margin-bottom:10px}
+.lv button{font:inherit;font-size:13px;padding:5px 12px;margin:0 2px;border:1px solid #c9c9ce;background:#fff;border-radius:6px;cursor:pointer}
+.lv button.on{background:#1b1b1e;color:#fff;border-color:#1b1b1e}
+canvas{background:#424242;border:1px solid #d9d9dd;border-radius:10px;max-width:94vw;touch-action:none}
+.msg{min-height:22px;color:#2f5596;font-weight:600;margin:12px 0 4px}
+.tip{color:#6b6b70;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">← 小游戏合集</a></div>
+<h1>躲避来车</h1>
+<p class="info">里程 <b id="score">0</b>m · 最远 <b id="best">0</b>m</p>
+<div class="lv">
+  <button data-d="0">悠闲</button>
+  <button data-d="1" class="on">繁忙</button>
+  <button data-d="2">噩梦</button>
+</div>
+<canvas id="cv" width="400" height="560"></canvas>
+<p class="msg" id="msg">←/→ 或 A/D 变道 · 手机左右拖动</p>
+<p class="tip">躲开对向车流，蹭一下就结束 · 里程越远越快 · 金车值双倍里程</p>
+<script>
+(function(){
+"use strict";
+var W=400,H=560,ROAD_L=60,ROAD_R=340,LANES=[110,180,250,310],PW=44,PH=76;
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+var scoreEl=document.getElementById("score"),bestEl=document.getElementById("best"),msgEl=document.getElementById("msg");
+var diff=1;
+var px,py,traffic,score,best,over,run=false,raf=null,spawnT=0,frame=0,shake=0;
+
+function bestKey(){return "dodge_best_"+diff;}
+function loadBest(){try{best=parseInt(localStorage.getItem(bestKey())||"0",10)||0;}catch(e){best=0;}bestEl.textContent=best;}
+function saveBest(){if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem(bestKey(),String(best));}catch(e){}}}
+function speedNow(){
+  var base=[5.0,6.4,7.8][diff];
+  return Math.min(base+score*0.012,[8,10,13][diff]);
+}
+function reset(){
+  px=LANES[1];py=H-100;
+  traffic=[];score=0;over=false;run=false;frame=0;spawnT=0;shake=0;
+  scoreEl.textContent="0";
+  loadBest();
+  msgEl.textContent="点画布开始 · ←/→ 或左右拖动变道";
+}
+function spawnCar(){
+  var lane=LANES[Math.floor(Math.random()*LANES.length)];
+  // 与最近的前车保持最小间距
+  for(var i=0;i<traffic.length;i++){
+    var t=traffic[i];
+    if(t.lane===lane&&t.y<120)return;
+  }
+  traffic.push({
+    lane:lane,
+    y:-PH,
+    gold:Math.random()<0.1,
+    speedMul:0.85+Math.random()*0.4
+  });
+}
+function loop(){
+  raf=requestAnimationFrame(loop);
+  frame++;
+  if(!run||over){draw();return;}
+  var sp=speedNow();
+  // 我车平滑
+  px+=(tx-px)*0.25;
+  px=Math.max(ROAD_L+PW/2,Math.min(ROAD_R-PW/2,px));
+  // 里程
+  score+=Math.round(sp*0.5);
+  scoreEl.textContent=score;
+  // 生成
+  spawnT--;
+  if(spawnT<=0){spawnCar();spawnT=Math.max(16,46-diff*10-Math.floor(score/300)*3);}
+  // 车流
+  for(var i=traffic.length-1;i>=0;i--){
+    var t=traffic[i];
+    t.y+=sp*t.speedMul*(t.gold?1.15:1);
+    if(t.y>H+PH){traffic.splice(i,1);continue;}
+    // 碰撞（AABB：横向 <40、纵向 <68 即相交，留 6px 容错）
+    if(Math.abs(t.lane-px)<PW-4&&Math.abs(t.y-py)<PH-8){
+      die();
+      return;
+    }
+  }
+  // 抖动衰减
+  if(shake>0)shake-=0.5;
+  draw();
+}
+function die(){
+  over=true;run=false;shake=14;
+  saveBest();
+  msgEl.textContent="撞了！里程 "+score+"m（"+["悠闲","繁忙","噩梦"][diff]+"）· R 重开";
+}
+function drawCar(x,y,color,gold){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle=color;
+  roundRect(-PW/2,-PH/2,PW,PH,9);ctx.fill();
+  ctx.strokeStyle="rgba(0,0,0,.35)";ctx.lineWidth=2;ctx.stroke();
+  // 车窗
+  ctx.fillStyle="rgba(255,255,255,.65)";
+  roundRect(-PW/2+7,-PH/2+10,PW-14,16,4);ctx.fill();
+  roundRect(-PW/2+7,PH/2-24,PW-14,14,4);ctx.fill();
+  if(gold){
+    ctx.fillStyle="#FDD835";
+    ctx.font="bold 13px sans-serif";ctx.textAlign="center";
+    ctx.fillText("$",0,4);
+  }
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function draw(){
+  ctx.save();
+  if(shake>0){ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);}
+  // 路
+  ctx.fillStyle="#424242";ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#4d4d4d";ctx.fillRect(ROAD_L,0,ROAD_R-ROAD_L,H);
+  // 路肩
+  ctx.fillStyle="#bdbdbd";ctx.fillRect(ROAD_L-8,0,8,H);ctx.fillRect(ROAD_R,0,8,H);
+  ctx.fillStyle="#E53935";
+  for(var y=(frame*speedScroll()%(H));y<H;y+=40){
+    ctx.fillRect(ROAD_L-8,y,8,20);
+    ctx.fillRect(ROAD_R,y,8,20);
+  }
+  // 车道虚线
+  ctx.strokeStyle="#fff";ctx.lineWidth=3;ctx.setLineDash([22,26]);
+  ctx.lineDashOffset=-(frame*speedScroll())%48;
+  var laneX=[145,215,285];
+  for(var i=0;i<3;i++){
+    ctx.beginPath();ctx.moveTo(laneX[i],0);ctx.lineTo(laneX[i],H);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // 交通车
+  for(i=0;i<traffic.length;i++){
+    var t=traffic[i];
+    drawCar(t.lane,t.y,t.gold?"#FFB300":"#c62828",t.gold);
+  }
+  // 我车
+  drawCar(px,py,"#1E88E8",false);
+  ctx.restore();
+}
+function speedScroll(){return run&&!over?speedNow()*1.4:0;}
+var tx=null;
+function setTarget(x){
+  if(tx===null)tx=px;
+  tx=x;
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="r"||e.key==="R"){reset();return;}
+  if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A"){
+    if(tx===null)tx=px;
+    var idx=LANES.indexOf(nearestLane(tx));
+    tx=LANES[Math.max(0,idx-1)];
+    e.preventDefault();
+  }
+  if(e.key==="ArrowRight"||e.key==="d"||e.key==="D"){
+    if(tx===null)tx=px;
+    var idx2=LANES.indexOf(nearestLane(tx));
+    tx=LANES[Math.min(LANES.length-1,idx2+1)];
+    e.preventDefault();
+  }
+});
+function nearestLane(x){
+  var bestI=0,bd=1e9;
+  for(var i=0;i<LANES.length;i++){
+    var d=Math.abs(LANES[i]-x);
+    if(d<bd){bd=d;bestI=i;}
+  }
+  return LANES[bestI];
+}
+cv.addEventListener("mousedown",function(){
+  if(!over&&!run){run=true;tx=px;msgEl.textContent="走！躲开红车，金色车 +1.5 倍";}
+});
+cv.addEventListener("touchstart",function(e){
+  if(over){reset();e.preventDefault();return;}
+  if(!run){run=true;tx=px;msgEl.textContent="走！躲开红车，金色车 +1.5 倍";}
+  e.preventDefault();
+},{passive:false});
+cv.addEventListener("mousemove",function(e){
+  if(!run||over)return;
+  var rect=cv.getBoundingClientRect();
+  setTarget((e.clientX-rect.left)*(W/rect.width));
+});
+cv.addEventListener("touchmove",function(e){
+  if(!run||over)return;
+  var rect=cv.getBoundingClientRect();
+  setTarget((e.touches[0].clientX-rect.left)*(W/rect.width));
+  e.preventDefault();
+},{passive:false});
+var bl=document.querySelectorAll(".lv button");
+for(var b=0;b<bl.length;b++){
+  bl[b].addEventListener("click",function(){
+    diff=+this.getAttribute("data-d");
+    for(var j=0;j<bl.length;j++)bl[j].classList.toggle("on",bl[j]===this);
+    reset();
+  });
+}
+reset();
+tx=px;
+loop();
+})();
+</script>
+</body>
+</html>
